@@ -73,6 +73,7 @@ log "toolchain policy: GOTOOLCHAIN=$GO_TOOLCHAIN"
 log "checking shell helpers"
 sh -n scripts/build.sh
 sh -n scripts/grant-admin-access.sh
+sh -n scripts/setup.sh
 log "downloading Go modules"
 go_cmd mod download
 log "running tests"
