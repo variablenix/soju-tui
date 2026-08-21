@@ -53,6 +53,8 @@ service manager.
   and first launch
 - [Using the TUI](docs/usage.md) — user selection, controls, operations, and
   certificate types
+- [Certificate safety](docs/certificates.md) — Let's Encrypt host TLS, upstream
+  CertFP preflight, and downstream device certificates
 - [Building and releases](docs/building.md) — helper script, targets, versions,
   and verification
 - [Security model](docs/security.md) — socket access, confirmations, secrets,

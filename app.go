@@ -36,6 +36,7 @@ type AdminForm struct {
 type AdminOperation struct {
 	Summary               string
 	Args                  []string
+	Preflight             []string
 	Refresh               []string
 	Mutating              bool
 	Secrets               []string
@@ -56,17 +57,18 @@ type AdminConfirmation struct {
 }
 
 type AdminState struct {
-	View          AdminView
-	Cursor        int
-	Output        []string
-	Form          *AdminForm
-	Confirm       *AdminConfirmation
-	ExitConfirm   bool
-	Busy          bool
-	LastRefresh   []string
-	LastOperation *AdminOperation
-	Capabilities  AdminCapabilities
-	Users         []string
+	View             AdminView
+	Cursor           int
+	Output           []string
+	Form             *AdminForm
+	Confirm          *AdminConfirmation
+	ExitConfirm      bool
+	Busy             bool
+	LastRefresh      []string
+	LastOperation    *AdminOperation
+	PendingOperation *AdminOperation
+	Capabilities     AdminCapabilities
+	Users            []string
 }
 
 type AdminCapabilities struct {
@@ -239,6 +241,48 @@ func (a *App) processResult(result adminResult) {
 			a.admin.Output = trimOutput(a.admin.Output)
 			return
 		}
+		return
+	}
+	if result.Operation.FollowUpKind == "cert-generate-preflight" {
+		planned := a.admin.PendingOperation
+		a.admin.PendingOperation = nil
+		if planned == nil {
+			a.admin.Output = append(a.admin.Output, "ERROR: certificate generation preflight lost its pending operation")
+			a.setStatusLocked("certificate generation cancelled safely", 0)
+			a.admin.Output = trimOutput(a.admin.Output)
+			return
+		}
+		if result.Err == nil {
+			a.admin.Output = append(a.admin.Output,
+				"EXISTING UPSTREAM SASL CERTIFICATE FOUND",
+				strings.TrimSpace(output),
+				"The following confirmation replaces only this user's upstream IRC CertFP certificate. The Soju host TLS/Let's Encrypt files are not touched.",
+			)
+			planned.ConfirmPhrase = "REPLACE EXISTING UPSTREAM CERTIFICATE"
+			a.admin.Confirm = &AdminConfirmation{Operation: *planned}
+			a.admin.View = adminOutput
+			a.setStatusLocked("existing CertFP found; review fingerprints and type the replacement phrase", 0)
+			a.admin.Output = trimOutput(a.admin.Output)
+			return
+		}
+		if isCertFPNotConfigured(output) {
+			a.admin.Output = append(a.admin.Output,
+				"No existing upstream SASL CertFP certificate was found for this user and network.",
+				"Generation affects only upstream IRC authentication. The Soju host TLS/Let's Encrypt files are not touched.",
+			)
+			planned.ConfirmPhrase = "GENERATE UPSTREAM CERTIFICATE"
+			a.admin.Confirm = &AdminConfirmation{Operation: *planned}
+			a.admin.View = adminOutput
+			a.setStatusLocked("no existing CertFP found; type the generation phrase to continue", 0)
+			a.admin.Output = trimOutput(a.admin.Output)
+			return
+		}
+		a.admin.Output = append(a.admin.Output, "ERROR: could not safely inspect the existing upstream certificate: "+redactText(result.Err.Error(), result.Operation.Secrets))
+		if strings.TrimSpace(output) != "" {
+			a.admin.Output = append(a.admin.Output, strings.TrimSpace(output))
+		}
+		a.setStatusLocked("certificate generation blocked because preflight failed", 0)
+		a.admin.Output = trimOutput(a.admin.Output)
 		return
 	}
 	if result.Err != nil {

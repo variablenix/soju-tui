@@ -10,6 +10,18 @@
 The Linux release binaries are static and do not require Go or ncurses at
 runtime.
 
+## Production host TLS
+
+For production, configure Soju with a certificate from a publicly trusted CA,
+such as Let's Encrypt, whose DNS name matches the hostname used by clients.
+Use Certbot or another ACME client outside `soju-tui`, and automate renewal plus
+Soju reload with a deploy hook appropriate for the host.
+
+`soju-tui` only inspects the public certificate from the config's `tls` line.
+It never runs Certbot, replaces host TLS files, reads the private key, or reloads
+Soju. See [Certificate safety](certificates.md) before generating any upstream
+CertFP certificate.
+
 ## Guided Linux setup
 
 From the repository, preview the setup first:

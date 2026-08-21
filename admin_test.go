@@ -210,6 +210,13 @@ func TestCertificateGenerationUsesCompatibleDefaults(t *testing.T) {
 	if containsArg(op.Args, "-key-type") || containsArg(op.Args, "-bits") {
 		t.Fatalf("default key options should rely on Soju defaults: %#v", op.Args)
 	}
+	wantPreflight := []string{"user", "run", "alice", "certfp", "fingerprint", "-network", "libera"}
+	if strings.Join(op.Preflight, "\x00") != strings.Join(wantPreflight, "\x00") {
+		t.Fatalf("certificate preflight = %#v, want %#v", op.Preflight, wantPreflight)
+	}
+	if op.ConfirmPhrase != "GENERATE OR REPLACE UPSTREAM CERTIFICATE" {
+		t.Fatalf("fallback confirmation phrase = %q", op.ConfirmPhrase)
+	}
 	form.Fields[2].Value = "ed25519"
 	op, err = buildAdminOperation("/etc/soju/config", form)
 	if err != nil {
