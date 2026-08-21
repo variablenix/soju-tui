@@ -156,6 +156,60 @@ func TestParseUserDeleteConfirmation(t *testing.T) {
 	}
 }
 
+func TestResetSASLRequiresTypedConfirmation(t *testing.T) {
+	form, err := newAdminForm("sasl-reset")
+	if err != nil {
+		t.Fatal(err)
+	}
+	form.Fields[0].Value = "alice"
+	form.Fields[1].Value = "libera"
+	op, err := buildAdminOperation("/etc/soju/config", form)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if op.ConfirmPhrase != "RESET SASL" {
+		t.Fatalf("confirmation phrase = %q", op.ConfirmPhrase)
+	}
+}
+
+func TestNetworkUpdatePrefillSubmitsOnlyChanges(t *testing.T) {
+	form := newNetworkUpdateForm("alice", NetworkStatus{Name: "libera", Address: "ircs://irc.libera.chat:6697"})
+	form.Fields[4].Value = "alice_"
+	op, err := buildAdminOperation("/etc/soju/config", form)
+	if err != nil {
+		t.Fatal(err)
+	}
+	joined := strings.Join(op.Args, "\x00")
+	if !strings.Contains(joined, "-nick\x00alice_") {
+		t.Fatalf("nickname change missing: %#v", op.Args)
+	}
+	if strings.Contains(joined, "-addr") || strings.Contains(joined, "-name") || strings.Contains(joined, "-enabled") {
+		t.Fatalf("unchanged prefilled values were submitted: %#v", op.Args)
+	}
+}
+
+func TestNetworkUpdateRejectsNoChangesAndTargetChange(t *testing.T) {
+	form := newNetworkUpdateForm("alice", NetworkStatus{Name: "libera", Address: "ircs://irc.libera.chat:6697"})
+	if _, err := buildAdminOperation("/etc/soju/config", form); err == nil || !strings.Contains(err.Error(), "No network settings changed") {
+		t.Fatalf("expected no-change error, got %v", err)
+	}
+	form.Fields[1].Value = "other"
+	if _, err := buildAdminOperation("/etc/soju/config", form); err == nil || !strings.Contains(err.Error(), "cannot be changed") {
+		t.Fatalf("expected immutable-target error, got %v", err)
+	}
+}
+
+func TestNonTextFormFieldIgnoresTyping(t *testing.T) {
+	app := newTestApp()
+	app.admin.Form = &AdminForm{Fields: []AdminField{{Kind: "readonly", Value: "alice"}}}
+	app.adminHandleKey("x", 'x')
+	app.adminHandleKey("backspace", 0)
+	if got := app.admin.Form.Fields[0].Value; got != "alice" {
+		t.Fatalf("read-only field changed to %q", got)
+	}
+	app.close()
+}
+
 func containsArg(args []string, want string) bool {
 	for _, arg := range args {
 		if arg == want {

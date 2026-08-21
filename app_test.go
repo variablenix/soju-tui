@@ -88,3 +88,37 @@ func TestUnrelatedFailureHasNoPermissionHint(t *testing.T) {
 		t.Fatalf("unexpected hint: %q", hint)
 	}
 }
+
+func TestTypedConfirmationRequiresExactPhrase(t *testing.T) {
+	app := newTestApp()
+	app.backend = &SojuCtl{Path: "/bin/false"}
+	app.admin.Confirm = &AdminConfirmation{Operation: AdminOperation{
+		ConfirmPhrase: "RESET SASL",
+	}}
+	for _, char := range "reset sasl" {
+		app.adminHandleKey(string(char), char)
+	}
+	app.adminHandleKey("enter", 0)
+	if app.admin.Confirm == nil || app.admin.Busy {
+		t.Fatal("a mismatched phrase must not execute or close confirmation")
+	}
+	for range []rune("reset sasl") {
+		app.adminHandleKey("backspace", 0)
+	}
+	for _, char := range "RESET SASL" {
+		app.adminHandleKey(string(char), char)
+	}
+	app.adminHandleKey("enter", 0)
+	if app.admin.Confirm != nil || !app.admin.Busy {
+		t.Fatal("the exact phrase must execute the operation")
+	}
+	app.close()
+}
+
+func TestDeviceCertificateDisabledHint(t *testing.T) {
+	hint := sojuCtlFailureHint("client certificate authentication is disabled")
+	if !strings.Contains(hint, "CLIENT DEVICE CERTIFICATES ARE DISABLED") ||
+		!strings.Contains(hint, "Server TLS certificate") {
+		t.Fatalf("unexpected device-certificate hint: %q", hint)
+	}
+}
