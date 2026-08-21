@@ -43,6 +43,10 @@ file dist/soju-tui-linux-amd64 dist/soju-tui-linux-arm64
 `x86_64` uses the AMD64 artifact; `aarch64` uses ARM64. A binary built with
 `--target host` on macOS cannot run on Linux.
 
+Installing Go or ncurses will not fix an execution-format error. The prebuilt
+Linux executables do not require either at runtime; use the executable matching
+the server's operating system and CPU architecture.
+
 ## `soju-tui` command not found
 
 The guided setup normally installs `/usr/local/bin/soju-tui`. Verify the file

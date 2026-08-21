@@ -2,9 +2,13 @@
 
 ## Build helper
 
-The source requires Go 1.26.6 or newer so builds contain the standard-library
+`soju-tui` is implemented in Go with the pure-Go `tcell` terminal library. It
+does not use ncurses. Go is required only when building from source; operators
+running a tracked prebuilt Linux artifact do not need a Go installation.
+
+Source builds require Go 1.26.6 or newer so they contain the standard-library
 fix for GO-2026-5972. The helper checks scripts, downloads modules, runs tests
-and vet, then writes binaries to `dist/`.
+and vet, then writes executables to `dist/`.
 
 Build the common Linux target after source updates:
 
@@ -75,6 +79,8 @@ go vet ./...
 sh -n scripts/build.sh scripts/grant-admin-access.sh scripts/setup.sh
 ```
 
-Linux release artifacts use `CGO_ENABLED=0` and are statically linked. Confirm
+Linux release artifacts use `CGO_ENABLED=0` and are statically linked. They do
+not need a separate Go runtime, C runtime, or ncurses library. They still invoke
+the host's `sojuctl` executable to administer the running Soju instance. Confirm
 the downloaded architecture with `file dist/soju-tui-linux-*` when diagnosing
 an execution-format error.

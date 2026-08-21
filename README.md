@@ -19,7 +19,9 @@ it is not an IRC chat client and never opens channels or displays messages.
 - Preview every mutation as a redacted `sojuctl` command before confirmation.
 - Open built-in, offline help with `?`, `F1`, or the help menu item.
 - Use a responsive Soju-TUI bottle wordmark without crowding command output.
-- Run from static Linux AMD64 or ARM64 binaries without Go or ncurses.
+- Written in Go and distributed as self-contained Linux AMD64 and ARM64
+  executables. Running those executables requires neither the Go toolchain nor
+  ncurses; a running Soju instance and `sojuctl` are still required.
 
 ![Soju-TUI administration interface](soju-tui-screen.png)
 
@@ -50,11 +52,12 @@ hostname, admin socket, and TLS certificate paths before saving a non-secret
 local profile. Rerun `./scripts/setup.sh` after pulling an updated binary; it
 skips an unchanged installed copy and re-verifies administrative access.
 
-The project is built and tested primarily on Debian with systemd. The static
-Linux binaries also work on comparable Linux environments, and the setup
-wizard recognizes several common package managers. Other Unix-like systems can
-build the host target and configure admin-socket permissions with their native
-service manager.
+The project is built and tested primarily on Debian with systemd. The TUI
+executable itself does not depend on systemd; systemd is used by the guided
+setup to persist the admin-socket ACL after Soju recreates the socket. The
+prebuilt Linux executables work on AMD64 and ARM64 Linux environments with a
+compatible terminal. Other Unix-like systems can build the host target and
+configure admin-socket permissions with their native service manager.
 
 ## Documentation
 

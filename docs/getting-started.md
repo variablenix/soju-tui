@@ -2,13 +2,23 @@
 
 ## Requirements
 
-- A running Soju instance and matching `sojuctl` executable.
-- A Soju config containing `listen unix+admin://` or an explicit admin socket.
-- A trusted local account allowed to read the config and write the admin socket.
-- A normal terminal with a usable terminfo entry.
+The project is written in Go, but the Go toolchain is a build dependency—not a
+dependency of the prebuilt Linux executables. The TUI uses the pure-Go `tcell`
+terminal library and does not use ncurses.
 
-The Linux release binaries are static and do not require Go or ncurses at
-runtime.
+| Component | Running a prebuilt Linux executable | Building from source |
+| --- | --- | --- |
+| Running Soju instance | Required | Required for live administration only |
+| Matching `sojuctl` executable | Required | Required for live administration only |
+| Soju config and writable admin socket | Required | Required for live administration only |
+| Usable terminal/terminfo | Required | Required when running the result |
+| Go toolchain | Not required | Go 1.26.6 or newer required |
+| ncurses development/runtime library | Not required | Not required |
+| systemd and ACL tools | Not required by the TUI | Used only by the guided Linux socket-access setup |
+
+The tracked Linux AMD64 and ARM64 release artifacts are built with
+`CGO_ENABLED=0` and are statically linked. Select the artifact matching the
+host architecture.
 
 ## Production host TLS
 
@@ -72,12 +82,15 @@ Use the path that matches the host:
   and configure equivalent admin-socket access with the native service manager.
 
 The setup path is tested on Debian. Package discovery also supports APT, DNF,
-YUM, Zypper, and Pacman environments. The persistent ACL helper requires
-systemd, `setfacl`, `runuser`, and standard Unix utilities.
+YUM, Zypper, and Pacman environments. Only the persistent admin-socket ACL
+helper requires systemd, `setfacl`, `runuser`, and standard Unix utilities; the
+TUI executable itself does not.
 
 ## Other Unix-like systems
 
-The TUI itself is portable Go code. Build it on the target system with:
+The source is portable Go code. On systems without a matching prebuilt Linux
+artifact, install Go 1.26.6 or newer and build a native executable on the target
+system with:
 
 ```sh
 ./scripts/build.sh --target host
