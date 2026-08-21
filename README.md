@@ -31,15 +31,17 @@ Preview and run the guided setup from the repository:
 ./scripts/setup.sh
 ```
 
-Then run the binary as the regular local user authorized by the wizard:
+The wizard installs the matching binary as `/usr/local/bin/soju-tui`. Run it as
+the regular local user authorized by the wizard:
 
 ```sh
-./dist/soju-tui-linux-amd64
+soju-tui
 ```
 
-Use `soju-tui-linux-arm64` on an ARM64 host. The first TUI launch asks you to
-confirm the discovered config, `sojuctl`, hostname, admin socket, and TLS
-certificate paths before saving a non-secret local profile.
+The first TUI launch asks you to confirm the discovered config, `sojuctl`,
+hostname, admin socket, and TLS certificate paths before saving a non-secret
+local profile. Rerun `./scripts/setup.sh` after pulling an updated binary; it
+skips an unchanged installed copy and re-verifies administrative access.
 
 The project is built and tested primarily on Debian with systemd. The static
 Linux binaries also work on comparable Linux environments, and the setup

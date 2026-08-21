@@ -43,6 +43,28 @@ file dist/soju-tui-linux-amd64 dist/soju-tui-linux-arm64
 `x86_64` uses the AMD64 artifact; `aarch64` uses ARM64. A binary built with
 `--target host` on macOS cannot run on Linux.
 
+## `soju-tui` command not found
+
+The guided setup normally installs `/usr/local/bin/soju-tui`. Verify the file
+and your command search path:
+
+```sh
+ls -l /usr/local/bin/soju-tui
+command -v soju-tui
+/usr/local/bin/soju-tui -version
+```
+
+If it is missing or stale, return to the repository and safely preview and
+rerun setup:
+
+```sh
+./scripts/setup.sh --dry-run
+./scripts/setup.sh
+```
+
+If `/usr/local/bin` is not in the login shell's `PATH`, run the absolute path or
+choose a trusted directory already in `PATH` with `--install-path`.
+
 ## A menu action is missing
 
 The TUI intentionally omits commands not reported by the running Soju server.
