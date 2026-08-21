@@ -18,7 +18,8 @@ func TestAdminUIUsesAdministrationIdentityAndResponsiveBrand(t *testing.T) {
 	for _, expected := range []string{
 		adminSidebarSubtitle,
 		"SOJU-TUI ADMINISTRATION CONSOLE",
-		"SSSS   OOO   JJJJJ  U   U",
+		"____    ____   _____   _   _",
+		`\____\____\____\____\____`,
 		"|     SOJU     |",
 	} {
 		if !strings.Contains(large, expected) {
@@ -64,11 +65,13 @@ func TestFullAdminBrandBottleStaysOnOneAxis(t *testing.T) {
 		"|     SOJU     |",
 		"|      TUI     |",
 		"|              |",
+		"|              |",
 		"|______________|",
+		`\____________/`,
 	}
 	wantCenter := -1
 	for index, pattern := range patterns {
-		start := strings.Index(fullAdminBrand[index].text, pattern)
+		start := strings.LastIndex(fullAdminBrand[index].text, pattern)
 		if start < 0 {
 			t.Fatalf("brand row %d is missing %q", index, pattern)
 		}

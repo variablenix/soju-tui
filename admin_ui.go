@@ -16,19 +16,32 @@ type adminBrandLine struct {
 }
 
 var fullAdminBrand = []adminBrandLine{
-	{text: ` SSSS   OOO   JJJJJ  U   U         ____`, style: styleAccent},
-	{text: `S      O   O    J    U   U        |    |`, style: styleAccent},
-	{text: ` SSS   O   O    J    U   U        |____|`, style: styleAccent},
-	{text: `    S  O   O  J J    U   U       /      \`, style: styleAccent},
-	{text: `SSSS    OOO    JJ     UUU      /          \`, style: styleAccent},
-	{text: `                              /            \`, style: styleInfo},
-	{text: `TTTTT  U   U  III            |              |`, style: styleInfo},
-	{text: `  T    U   U   I             |     SOJU     |`, style: styleInfo},
-	{text: `  T    U   U   I             |      TUI     |`, style: styleInfo},
-	{text: `  T    U   U   I             |              |`, style: styleInfo},
-	{text: `  T     UUU   III            |______________|`, style: styleInfo},
+	{text: adminBrandWithBottle(`  ____    ____   _____   _   _`, `____`, 35), style: styleAccent},
+	{text: adminBrandWithBottle(` / ___|  / __ \ |  ___| | | | |`, `|    |`, 34), style: styleAccent},
+	{text: adminBrandWithBottle(` \___ \ | |  | || |___  | | | |`, `|____|`, 34), style: styleAccent},
+	{text: adminBrandWithBottle(`  ___) || |__| ||  ___| | |_| |`, "/      \\", 33), style: styleAccent},
+	{text: adminBrandWithBottle(` |____/  \____/ |_|      \___/`, "/          \\", 31), style: styleAccent},
+	{text: adminBrandWithBottle(`    \____\____\____\____\____`, "/            \\", 30), style: styleInfo},
+	{text: adminBrandWithBottle(``, `|              |`, 29), style: styleInfo},
+	{text: adminBrandWithBottle(` _____  _   _  ___`, `|     SOJU     |`, 29), style: styleInfo},
+	{text: adminBrandWithBottle(`|_   _|| | | | |_ |`, `|      TUI     |`, 29), style: styleInfo},
+	{text: adminBrandWithBottle(`  | |  | | | |  | |`, `|              |`, 29), style: styleInfo},
+	{text: adminBrandWithBottle(`  | |  | |_| |  | |`, `|              |`, 29), style: styleInfo},
+	{text: adminBrandWithBottle(`  |_|   \___/  |___|`, `|______________|`, 29), style: styleInfo},
+	{text: adminBrandWithBottle(`    \____\____\____\____`, `\____________/`, 30), style: styleInfo},
 	{text: "", style: styleMuted},
 	{text: `       SOJU-TUI ADMINISTRATION CONSOLE`, style: styleMuted},
+}
+
+// adminBrandWithBottle keeps the bottle on a fixed column even when a wordmark
+// row has a different width. This prevents small spacing edits from skewing its
+// center axis on terminals with different pane widths.
+func adminBrandWithBottle(left, bottle string, bottleColumn int) string {
+	padding := bottleColumn - runewidth.StringWidth(left)
+	if padding < 1 {
+		padding = 1
+	}
+	return left + strings.Repeat(" ", padding) + bottle
 }
 
 var compactAdminBrand = []adminBrandLine{
