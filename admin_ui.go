@@ -16,21 +16,21 @@ type adminBrandLine struct {
 }
 
 var fullAdminBrand = []adminBrandLine{
-	{text: adminBrandWithBottle(`  ____    ____   _____   _   _`, `____`, 35), style: styleAccent},
-	{text: adminBrandWithBottle(` / ___|  / __ \ |  ___| | | | |`, `|    |`, 34), style: styleAccent},
-	{text: adminBrandWithBottle(` \___ \ | |  | || |___  | | | |`, `|____|`, 34), style: styleAccent},
-	{text: adminBrandWithBottle(`  ___) || |__| ||  ___| | |_| |`, "/      \\", 33), style: styleAccent},
-	{text: adminBrandWithBottle(` |____/  \____/ |_|      \___/`, "/          \\", 31), style: styleAccent},
-	{text: adminBrandWithBottle(`    \____\____\____\____\____`, "/            \\", 30), style: styleInfo},
-	{text: adminBrandWithBottle(``, `|              |`, 29), style: styleInfo},
-	{text: adminBrandWithBottle(` _____  _   _  ___`, `|     SOJU     |`, 29), style: styleInfo},
-	{text: adminBrandWithBottle(`|_   _|| | | | |_ |`, `|      TUI     |`, 29), style: styleInfo},
-	{text: adminBrandWithBottle(`  | |  | | | |  | |`, `|              |`, 29), style: styleInfo},
-	{text: adminBrandWithBottle(`  | |  | |_| |  | |`, `|              |`, 29), style: styleInfo},
-	{text: adminBrandWithBottle(`  |_|   \___/  |___|`, `|______________|`, 29), style: styleInfo},
-	{text: adminBrandWithBottle(`    \____\____\____\____`, `\____________/`, 30), style: styleInfo},
+	{text: adminBrandWithBottle(`  ____    ___        _    _   _`, `____`, 47), style: styleAccent},
+	{text: adminBrandWithBottle(` / ___|  / _ \      | |  | | | |`, `|    |`, 46), style: styleAccent},
+	{text: adminBrandWithBottle(` \___ \  | | | |  _  | |  | | | |`, `|____|`, 46), style: styleAccent},
+	{text: adminBrandWithBottle(`  ___) |  | |_| |  | |_| |  | |_| |`, "/      \\", 45), style: styleAccent},
+	{text: adminBrandWithBottle(` |____/    \___/    \___/    \___/`, "/          \\", 43), style: styleAccent},
+	{text: adminBrandWithBottle(`    \_____\_____\_____\_____/`, "/            \\", 42), style: styleInfo},
+	{text: adminBrandWithBottle(``, `|              |`, 41), style: styleInfo},
+	{text: adminBrandWithBottle(` _____    _   _    ___`, `|     SOJU     |`, 41), style: styleInfo},
+	{text: adminBrandWithBottle(`|_   _|  | | | |  |_ _|`, `|      TUI     |`, 41), style: styleInfo},
+	{text: adminBrandWithBottle(`  | |    | | | |   | |`, `|              |`, 41), style: styleInfo},
+	{text: adminBrandWithBottle(`  | |    | |_| |   | |`, `|              |`, 41), style: styleInfo},
+	{text: adminBrandWithBottle(`  |_|     \___/   |___|`, `|______________|`, 41), style: styleInfo},
+	{text: adminBrandWithBottle(`    \_____\_____\_____/`, `\____________/`, 42), style: styleInfo},
 	{text: "", style: styleMuted},
-	{text: `       SOJU-TUI ADMINISTRATION CONSOLE`, style: styleMuted},
+	{text: `          SOJU-TUI ADMINISTRATION CONSOLE`, style: styleMuted},
 }
 
 // adminBrandWithBottle keeps the bottle on a fixed column even when a wordmark
