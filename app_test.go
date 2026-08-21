@@ -157,6 +157,65 @@ func TestMenuNavigationWrapsAndSupportsHomeEnd(t *testing.T) {
 	app.close()
 }
 
+func TestStaticHelpIsOfflineAndAlwaysAvailable(t *testing.T) {
+	app := newTestApp()
+	defer app.close()
+	app.admin.Capabilities = AdminCapabilities{Known: true, Commands: map[string]bool{}}
+
+	foundLocalHelp := false
+	foundServerHelp := false
+	for _, item := range app.adminMenuItemsLocked() {
+		foundLocalHelp = foundLocalHelp || item.Kind == "tui-help"
+		foundServerHelp = foundServerHelp || item.Kind == "help"
+	}
+	if !foundLocalHelp {
+		t.Fatal("static Soju-TUI help was filtered by server capabilities")
+	}
+	if foundServerHelp {
+		t.Fatal("unsupported server-provided BouncerServ help remained visible")
+	}
+
+	app.adminHandleKey("?", '?')
+	if !app.admin.HelpOpen || app.admin.Busy || app.admin.LastOperation != nil {
+		t.Fatal("static help unexpectedly started a backend operation")
+	}
+	help := strings.Join(sojuTUIHelp(), "\n")
+	for _, expected := range []string{
+		"SOJU-TUI HELP & DOCUMENTATION",
+		"https://soju.im/",
+		"https://soju.im/doc/soju.1.html",
+		"https://soju.im/doc/sojuctl.1.html",
+		"https://codeberg.org/emersion/soju",
+		"does not open them or fetch remote content",
+	} {
+		if !strings.Contains(help, expected) {
+			t.Fatalf("static help is missing %q:\n%s", expected, help)
+		}
+	}
+	if strings.ContainsAny(help, "\x00\x1b\r") {
+		t.Fatal("static help contains terminal control characters")
+	}
+
+	app.adminHandleKey("down", 0)
+	if app.admin.HelpScroll != 1 {
+		t.Fatalf("help scroll = %d, want 1", app.admin.HelpScroll)
+	}
+	app.adminHandleKey("end", 0)
+	if app.admin.HelpScroll != len(sojuTUIHelp())-1 {
+		t.Fatalf("help End scroll = %d", app.admin.HelpScroll)
+	}
+	app.adminHandleKey("home", 0)
+	app.adminHandleKey("?", '?')
+	if app.admin.HelpOpen {
+		t.Fatal("question mark did not close static help")
+	}
+
+	handleAdminKeyEvent(app, tcell.NewEventKey(tcell.KeyF1, 0, tcell.ModNone))
+	if !app.admin.HelpOpen || app.admin.HelpScroll != 0 {
+		t.Fatal("F1 did not open static help")
+	}
+}
+
 func TestUnsupportedDeviceCertificateActionsAreOmitted(t *testing.T) {
 	app := newTestApp()
 	app.admin.Capabilities = AdminCapabilities{Known: true, Commands: map[string]bool{

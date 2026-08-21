@@ -58,6 +58,10 @@ func handleAdminKeyEvent(app *App, event *tcell.EventKey) {
 		key = "home"
 	case tcell.KeyEnd:
 		key = "end"
+	case tcell.KeyPgUp:
+		key = "pageup"
+	case tcell.KeyPgDn:
+		key = "pagedown"
 	case tcell.KeyTAB:
 		key = "tab"
 	case tcell.KeyBacktab:
@@ -66,6 +70,8 @@ func handleAdminKeyEvent(app *App, event *tcell.EventKey) {
 		key = "enter"
 	case tcell.KeyCtrlS:
 		key = "submit"
+	case tcell.KeyF1:
+		key = "help"
 	case tcell.KeyCtrlC, tcell.KeyCtrlQ:
 		key = "quit"
 	case tcell.KeyEscape:
@@ -102,10 +108,16 @@ func drawAdminUI(screen tcell.Screen, app *App) {
 		drawAdminConfirmation(screen, app, contentX, contentWidth, 2, height-4)
 	} else if app.admin.Form != nil {
 		drawAdminForm(screen, app, contentX, contentWidth, 2, height-4)
+	} else if app.admin.HelpOpen {
+		drawAdminHelp(screen, app, contentX, contentWidth, 2, height-4)
 	} else {
 		drawAdminOutput(screen, app, contentX, contentWidth, 2, height-4)
 	}
-	putClipped(screen, 0, height-2, width, " ↑↓ select  Enter open  r refresh  Esc back  Ctrl-S preview  q quit", styleMuted)
+	footer := " ↑↓ select  Enter open  ? help  r refresh  Esc back  Ctrl-S preview  q quit"
+	if app.admin.HelpOpen && !app.admin.ExitConfirm {
+		footer = " ↑↓ scroll  PgUp/PgDn page  Home/End jump  Esc or ? close  q quit"
+	}
+	putClipped(screen, 0, height-2, width, footer, styleMuted)
 	status := " " + app.currentStatusLocked()
 	if app.admin.Busy {
 		status += "  [running]"
@@ -201,6 +213,35 @@ func drawAdminBrand(screen tcell.Screen, x, width, top, bottom int) {
 		lineWidth := runewidth.StringWidth(line.text)
 		lineX := x + (width-lineWidth)/2
 		putClipped(screen, lineX, brandTop+index, lineWidth, line.text, line.style)
+	}
+}
+
+func drawAdminHelp(screen tcell.Screen, app *App, x, width, y, height int) {
+	lines := sojuTUIHelp()
+	start := app.admin.HelpScroll
+	if start < 0 {
+		start = 0
+	}
+	if start >= len(lines) {
+		start = len(lines) - 1
+	}
+	row := y
+	for index := start; index < len(lines) && row < y+height; index++ {
+		style := styleNormal
+		line := lines[index]
+		if index == 0 || strings.ToUpper(line) == line && line != "" && !strings.Contains(line, "HTTPS://") {
+			style = styleAccent
+		}
+		if strings.Contains(line, "https://") {
+			style = styleInfo
+		}
+		for _, wrapped := range wrapText(line, width) {
+			if row >= y+height {
+				break
+			}
+			putClipped(screen, x, row, width, wrapped, style)
+			row++
+		}
 	}
 }
 
