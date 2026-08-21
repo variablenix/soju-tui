@@ -97,6 +97,9 @@ func drawAdminSidebar(screen tcell.Screen, app *App, width, height int) {
 		}
 		style := styleMuted
 		item := items[i]
+		if strings.Contains(item.Kind, "cert") {
+			style = styleInfo
+		}
 		if i == app.admin.Cursor && app.admin.Form == nil && app.admin.Confirm == nil {
 			style = styleAccent.Background(tcell.ColorDarkBlue)
 		}
@@ -115,6 +118,9 @@ func drawAdminOutput(screen tcell.Screen, app *App, x, width, y, height int) {
 		lower := strings.ToLower(text)
 		if strings.HasPrefix(text, "> ") {
 			style = styleAccent
+		}
+		if strings.Contains(strings.ToUpper(text), "CERTIFICATE") && !strings.HasPrefix(text, "ERROR:") {
+			style = styleInfo
 		}
 		if strings.HasPrefix(text, "ERROR:") || strings.Contains(lower, "permission denied") {
 			style = styleError
@@ -167,6 +173,16 @@ func drawAdminForm(screen tcell.Screen, app *App, x, width, y, height int) {
 		value := field.Value
 		if field.Secret && value != "" {
 			value = strings.Repeat("•", len([]rune(value)))
+		}
+		if field.Kind == "user" && len(field.Options) > 0 {
+			choice := "custom"
+			for index, option := range field.Options {
+				if value == option {
+					choice = fmt.Sprintf("%d/%d", index+1, len(field.Options))
+					break
+				}
+			}
+			value += "  [" + choice + "]"
 		}
 		line := fmt.Sprintf("%-22s %s", field.Label+":", value)
 		putClipped(screen, x, row, width, line, style)
