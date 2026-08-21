@@ -63,9 +63,13 @@ changes require the displayed phrase exactly.
 
 ## Network updates
 
-**Update network for user** asks for a user and network, runs network status,
-then fills the address, name, and enabled state exposed by Soju. Only changed
-values are submitted.
+Actions that target an existing network use a guided user → network flow. After
+the user is chosen, the TUI runs `network status` and turns the saved names and
+addresses into a `Space`-selectable field. Manual entry remains available for a
+listing truncated by Soju.
+
+**Update network for user** then fills the address, name, and enabled state
+exposed by Soju. Only changed values are submitted.
 
 Soju does not return saved upstream passwords, nicknames, usernames, real
 names, CertFP values, or connect commands in network status. Those fields remain
@@ -81,8 +85,15 @@ reviewed operation. Clearing uses an exact confirmation phrase. Connect and raw
 network commands are treated as potentially secret and redacted from the
 confirmation preview.
 
-Channel status can be filtered to one network or left blank to list channels
-across all networks for the selected user.
+Channel operations use the same network selector. Update and delete actions
+also run `channel status` for the chosen network and offer the saved channels as
+a selectable list. A channel update loads the current detached state. Soju does
+not expose the saved relay-detached, reattach-on, detach-after, or detach-on
+values in channel status, so those fields are labeled **blank keeps current**
+and are sent only when the operator supplies a replacement.
+
+Channel status defaults to **All networks**. Leaving its network field blank
+has the same meaning; choosing a saved network filters the output.
 
 ## Certificate types
 
@@ -97,6 +108,9 @@ Soju uses three unrelated certificate concepts:
   an upstream IRC network. Before generation, the TUI checks for an existing
   CertFP and displays its fingerprints. Creating and replacing use different
   exact confirmation phrases; an inconclusive preflight blocks the mutation.
+  The fingerprint viewer defaults to **All networks** and performs one
+  read-only Soju request per saved network, displaying grouped network headers
+  and clearly marking networks where CertFP is not configured.
 - **Client device certificates** authenticate downstream IRC clients to Soju.
   Registration also requires `client-cert-auth true`. These actions are omitted
   when the running Soju version lacks the command.
@@ -110,7 +124,7 @@ and production Let's Encrypt guidance.
 - `Home`/`End` — jump to the first or last action
 - `Enter` — open an action or advance a form
 - `Tab`/`Shift-Tab` — move between fields
-- `Space` — cycle users, booleans, and choices
+- `Space` — cycle discovered users, networks, channels, booleans, and choices
 - `Ctrl-S` — preview or submit a form
 - `y` — approve an ordinary mutation
 - exact phrase + `Enter` — approve a destructive/high-risk mutation
