@@ -81,8 +81,8 @@ func sojuCtlFailureHint(output string) string {
 	return strings.Join([]string{
 		"ADMIN SOCKET ACCESS DENIED",
 		"The current Linux account cannot write " + socketPath + ".",
-		"Run this once from the repository, then retry:",
-		"  sudo ./scripts/grant-admin-access.sh --user \"$(id -un)\" --socket " + quoteDisplayArg(socketPath),
+		"Run the first-time setup wizard from the repository, then retry:",
+		"  ./scripts/setup.sh",
 		"Do not make the admin socket world-writable.",
 	}, "\n")
 }
