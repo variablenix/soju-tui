@@ -20,6 +20,19 @@ Other targets:
 ./scripts/build.sh --target host
 ```
 
+On a configured Linux host, install or update the short command after a
+successful build:
+
+```sh
+./scripts/setup.sh
+soju-tui -version
+```
+
+The setup wizard copies the architecture-matched artifact to
+`/usr/local/bin/soju-tui`. It does not copy an unchanged artifact. Use
+`--binary /absolute/path` for a custom build or `--no-install` to keep running
+from `dist/`.
+
 To fast-forward from Git before building:
 
 ```sh

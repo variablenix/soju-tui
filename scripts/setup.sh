@@ -8,6 +8,9 @@ TARGET_USER=${SUDO_USER:-}
 CONFIG_PATH=/etc/soju/config
 SOCKET_PATH=
 SOJUCTL_PATH=
+TUI_BINARY=
+INSTALL_PATH=/usr/local/bin/soju-tui
+INSTALL_BINARY=1
 DRY_RUN=0
 ASSUME_YES=0
 
@@ -15,17 +18,21 @@ usage() {
 	cat <<'EOF'
 Usage: scripts/setup.sh [options]
 
-First-time setup for a local soju-tui administrator. The wizard discovers the
-admin socket from the soju config, installs the ACL utility when approved,
-previews persistent socket access, applies it, and verifies sojuctl.
+Initial and repeatable setup for a local soju-tui administrator. The wizard
+discovers the admin socket from the soju config, installs the ACL utility when
+approved, previews persistent socket access, applies it, installs the matching
+TUI binary, and verifies both sojuctl and the installed command.
 
 Options:
   --user USER       Local Linux account to authorize (default: sudo caller)
   --config PATH     Soju config path (default: /etc/soju/config)
   --socket PATH     Override the admin socket discovered from the config
   --sojuctl PATH    Override the sojuctl executable
+  --binary PATH     Override the architecture-matched source binary
+  --install-path P  Command path (default: /usr/local/bin/soju-tui)
+  --no-install      Configure socket access without installing the command
   --dry-run         Show detected settings and proposed changes only
-  --yes             Accept package and ACL confirmation prompts
+  --yes             Accept package, replacement, and ACL confirmation prompts
   -h, --help        Show this help
 
 Run it directly; the script requests sudo when needed:
@@ -48,7 +55,7 @@ if [ "$#" -eq 1 ]; then
 fi
 
 if [ "$(id -u)" -ne 0 ]; then
-	command -v sudo >/dev/null 2>&1 || fail "sudo is required for first-time setup"
+	command -v sudo >/dev/null 2>&1 || fail "sudo is required for system setup"
 	exec sudo -- "$SCRIPT_PATH" "$@"
 fi
 
@@ -73,6 +80,20 @@ while [ "$#" -gt 0 ]; do
 		[ "$#" -ge 2 ] || fail "--sojuctl requires a value"
 		SOJUCTL_PATH=$2
 		shift 2
+		;;
+	--binary)
+		[ "$#" -ge 2 ] || fail "--binary requires a value"
+		TUI_BINARY=$2
+		shift 2
+		;;
+	--install-path)
+		[ "$#" -ge 2 ] || fail "--install-path requires a value"
+		INSTALL_PATH=$2
+		shift 2
+		;;
+	--no-install)
+		INSTALL_BINARY=0
+		shift
 		;;
 	--dry-run)
 		DRY_RUN=1
@@ -135,18 +156,119 @@ esac
 [ -x "$SOJUCTL_PATH" ] || fail "$SOJUCTL_PATH is not executable"
 [ -x "$GRANT_SCRIPT" ] || fail "$GRANT_SCRIPT is missing or not executable"
 
-case "$(uname -m)" in
-x86_64 | amd64) TUI_BINARY=$ROOT_DIR/dist/soju-tui-linux-amd64 ;;
-aarch64 | arm64) TUI_BINARY=$ROOT_DIR/dist/soju-tui-linux-arm64 ;;
-*) TUI_BINARY=$ROOT_DIR/dist/soju-tui ;;
+if [ -z "$TUI_BINARY" ]; then
+	case "$(uname -m)" in
+	x86_64 | amd64) TUI_BINARY=$ROOT_DIR/dist/soju-tui-linux-amd64 ;;
+	aarch64 | arm64) TUI_BINARY=$ROOT_DIR/dist/soju-tui-linux-arm64 ;;
+	*) TUI_BINARY=$ROOT_DIR/dist/soju-tui ;;
+	esac
+fi
+case "$TUI_BINARY" in
+/*) ;;
+*) fail "the TUI binary path must be absolute" ;;
 esac
+[ -f "$TUI_BINARY" ] || fail "$TUI_BINARY is missing; build or download the matching binary first"
+[ ! -L "$TUI_BINARY" ] || fail "refusing a symbolic-link source binary"
+[ -x "$TUI_BINARY" ] || fail "$TUI_BINARY is not executable"
+command -v runuser >/dev/null 2>&1 || fail "runuser is required"
+if ! runuser -u "$TARGET_USER" -- "$TUI_BINARY" -version >/dev/null 2>&1; then
+	fail "$TUI_BINARY cannot run as $TARGET_USER; verify its architecture and permissions"
+fi
 
-printf 'soju-tui first-time setup\n\n'
+INSTALL_STATUS=disabled
+if [ "$INSTALL_BINARY" -eq 1 ]; then
+	for REQUIRED_COMMAND in chmod chown cmp install mktemp mv stat; do
+		command -v "$REQUIRED_COMMAND" >/dev/null 2>&1 || fail "$REQUIRED_COMMAND is required to install the TUI command"
+	done
+	case "$INSTALL_PATH" in
+	/*) ;;
+	*) fail "the install path must be absolute" ;;
+	esac
+	case "$INSTALL_PATH" in
+	*[!A-Za-z0-9._/-]*) fail "the install path contains unsupported characters" ;;
+	esac
+	[ "$TUI_BINARY" != "$INSTALL_PATH" ] || fail "the source and install paths must differ; use --no-install to run in place"
+	[ ! -L "$INSTALL_PATH" ] || fail "refusing to replace a symbolic-link install path"
+	if [ -e "$INSTALL_PATH" ] && [ ! -f "$INSTALL_PATH" ]; then
+		fail "$INSTALL_PATH exists but is not a regular file"
+	fi
+	INSTALL_DIR=${INSTALL_PATH%/*}
+	[ -n "$INSTALL_DIR" ] || INSTALL_DIR=/
+	validate_install_directory() {
+		[ -d "$INSTALL_DIR" ] || fail "$INSTALL_DIR is not a directory"
+		[ ! -L "$INSTALL_DIR" ] || fail "refusing a symbolic-link install directory: $INSTALL_DIR"
+		[ "$(stat -c '%u' "$INSTALL_DIR")" = 0 ] || fail "install directory must be owned by root: $INSTALL_DIR"
+		INSTALL_DIR_MODE=$(stat -c '%a' "$INSTALL_DIR")
+		case "$INSTALL_DIR_MODE" in
+		*[2367][0-7] | *[0-7][2367]) fail "install directory must not be group- or world-writable: $INSTALL_DIR" ;;
+		esac
+	}
+	if [ -e "$INSTALL_DIR" ]; then
+		validate_install_directory
+	fi
+	installed_binary_is_current() {
+		[ -f "$INSTALL_PATH" ] &&
+			[ ! -L "$INSTALL_PATH" ] &&
+			cmp -s "$TUI_BINARY" "$INSTALL_PATH" &&
+			[ "$(stat -c '%u:%g:%a:%h' "$INSTALL_PATH")" = '0:0:755:1' ]
+	}
+	if installed_binary_is_current; then
+		INSTALL_STATUS='already current'
+	elif [ -f "$INSTALL_PATH" ] && cmp -s "$TUI_BINARY" "$INSTALL_PATH"; then
+		INSTALL_STATUS='will repair ownership or mode'
+	elif [ -e "$INSTALL_PATH" ]; then
+		INSTALL_STATUS='will update'
+	else
+		INSTALL_STATUS='will install'
+	fi
+fi
+
+printf 'soju-tui system setup\n\n'
 printf '  Local administrator: %s\n' "$TARGET_USER"
 printf '  Soju config:         %s\n' "$CONFIG_PATH"
 printf '  Admin socket:        %s\n' "$SOCKET_PATH"
 printf '  sojuctl:             %s\n' "$SOJUCTL_PATH"
-printf '  TUI binary:          %s\n\n' "$TUI_BINARY"
+printf '  TUI binary:          %s\n' "$TUI_BINARY"
+if [ "$INSTALL_BINARY" -eq 1 ]; then
+	printf '  Installed command:   %s (%s)\n\n' "$INSTALL_PATH" "$INSTALL_STATUS"
+else
+	printf '  Installed command:   disabled (--no-install)\n\n'
+fi
+
+if { [ "$INSTALL_STATUS" = 'will update' ] || [ "$INSTALL_STATUS" = 'will repair ownership or mode' ]; } &&
+	[ "$DRY_RUN" -ne 1 ] && [ "$ASSUME_YES" -ne 1 ]; then
+	printf 'Replace the existing regular file at %s? [y/N] ' "$INSTALL_PATH"
+	IFS= read -r ANSWER
+	case "$ANSWER" in
+	y | Y | yes | YES) ;;
+	*) fail "cancelled before replacing $INSTALL_PATH" ;;
+	esac
+fi
+
+install_tui_binary() {
+	[ "$INSTALL_BINARY" -eq 1 ] || return
+	if installed_binary_is_current; then
+		printf 'Installed command is already current: %s\n' "$INSTALL_PATH"
+		return
+	fi
+	if [ -e "$INSTALL_DIR" ]; then
+		validate_install_directory
+	else
+		install -d -m 0755 "$INSTALL_DIR"
+		validate_install_directory
+	fi
+	TEMP_BINARY=$(mktemp "$INSTALL_DIR/.soju-tui.install.XXXXXX") || fail "cannot create a temporary install file in $INSTALL_DIR"
+	trap 'rm -f "$TEMP_BINARY"' EXIT HUP INT TERM
+	install -m 0755 "$TUI_BINARY" "$TEMP_BINARY"
+	chown 0:0 "$TEMP_BINARY"
+	chmod 0755 "$TEMP_BINARY"
+	mv -f "$TEMP_BINARY" "$INSTALL_PATH"
+	TEMP_BINARY=
+	trap - EXIT HUP INT TERM
+	[ -x "$INSTALL_PATH" ] || fail "installed command is not executable: $INSTALL_PATH"
+	installed_binary_is_current || fail "installed command failed content, ownership, mode, or link-count verification"
+	printf 'Installed command: %s\n' "$INSTALL_PATH"
+}
 
 install_acl_package() {
 	if command -v apt-get >/dev/null 2>&1; then
@@ -203,12 +325,20 @@ else
 	"$GRANT_SCRIPT" --user "$TARGET_USER" --socket "$SOCKET_PATH"
 fi
 
+install_tui_binary
+
 printf '\nVerifying sojuctl as local user %s...\n' "$TARGET_USER"
 runuser -u "$TARGET_USER" -- "$SOJUCTL_PATH" -config "$CONFIG_PATH" server status
 
-if [ -x "$TUI_BINARY" ]; then
-	printf '\nSetup complete. Run as %s:\n  %s\n' "$TARGET_USER" "$TUI_BINARY"
-	printf 'The first TUI run will show the discovered hostname, admin socket, TLS certificate, config, and sojuctl paths for confirmation.\n'
+if [ "$INSTALL_BINARY" -eq 1 ]; then
+	printf '\nVerifying installed command as local user %s...\n' "$TARGET_USER"
+	runuser -u "$TARGET_USER" -- "$INSTALL_PATH" -version
+	if [ "$INSTALL_PATH" = /usr/local/bin/soju-tui ]; then
+		printf '\nSetup complete. Run as %s:\n  soju-tui\n' "$TARGET_USER"
+	else
+		printf '\nSetup complete. Run as %s:\n  %s\n' "$TARGET_USER" "$INSTALL_PATH"
+	fi
 else
-	printf '\nSocket access is configured, but %s is missing. Build or download the correct binary first.\n' "$TUI_BINARY"
+	printf '\nSetup complete without command installation. Run as %s:\n  %s\n' "$TARGET_USER" "$TUI_BINARY"
 fi
+printf 'The first TUI run will show the discovered hostname, admin socket, TLS certificate, config, and sojuctl paths for confirmation.\n'
