@@ -33,6 +33,11 @@ the host, admin socket, and administrator account accordingly.
 The host certificate viewer reads only the public certificate file. It reports
 the configured private-key path for clarity but never opens that file.
 
+Upstream CertFP generation is a separate per-user, per-network operation. The
+TUI performs a read-only fingerprint preflight first. Existing fingerprints are
+shown before replacement, and any unexpected preflight error blocks generation
+instead of guessing that no certificate exists.
+
 ## Scope
 
 The TUI does not edit Soju's config, database, listeners, or service definition.

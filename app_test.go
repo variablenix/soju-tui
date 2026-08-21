@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"testing"
 
@@ -171,6 +172,27 @@ func TestUnsupportedDeviceCertificateActionsAreOmitted(t *testing.T) {
 	app.close()
 }
 
+func TestCertificateGenerationIsOmittedWithoutSafePreflightCommand(t *testing.T) {
+	app := newTestApp()
+	app.admin.Capabilities = AdminCapabilities{Known: true, Commands: map[string]bool{
+		"certfp generate": true,
+	}}
+	for _, item := range app.adminMenuItemsLocked() {
+		if item.Kind == "cert-generate" {
+			t.Fatalf("certificate generation remained visible without certfp fingerprint: %#v", item)
+		}
+	}
+	app.admin.Capabilities.Commands["certfp fingerprint"] = true
+	found := false
+	for _, item := range app.adminMenuItemsLocked() {
+		found = found || item.Kind == "cert-generate"
+	}
+	if !found {
+		t.Fatal("certificate generation stayed hidden after safe preflight became available")
+	}
+	app.close()
+}
+
 func TestParseAdminCommandHelp(t *testing.T) {
 	commands := parseAdminCommandHelp("available commands: help, network status, server status\n")
 	for _, command := range []string{"help", "network status", "server status"} {
@@ -264,6 +286,60 @@ func TestUserTargetActionHandlesEmptyInstance(t *testing.T) {
 	})
 	if app.admin.Form != nil || !strings.Contains(strings.Join(app.admin.Output, "\n"), "Create a user") {
 		t.Fatalf("empty-user result was not explained: form=%#v output=%#v", app.admin.Form, app.admin.Output)
+	}
+	app.close()
+}
+
+func TestCertificatePreflightRequiresReplacementPhraseWhenExisting(t *testing.T) {
+	app := newTestApp()
+	planned := AdminOperation{Summary: "Generate upstream CertFP", Mutating: true}
+	app.admin.PendingOperation = &planned
+	app.processResult(adminResult{
+		Operation: AdminOperation{FollowUpKind: "cert-generate-preflight", Quiet: true},
+		Output:    "SHA-256 fingerprint: AA:BB:CC\n",
+	})
+	if app.admin.Confirm == nil || app.admin.Confirm.Operation.ConfirmPhrase != "REPLACE EXISTING UPSTREAM CERTIFICATE" {
+		t.Fatalf("existing certificate confirmation = %#v", app.admin.Confirm)
+	}
+	output := strings.Join(app.admin.Output, "\n")
+	if !strings.Contains(output, "EXISTING UPSTREAM SASL CERTIFICATE FOUND") || !strings.Contains(output, "AA:BB:CC") || !strings.Contains(output, "Let's Encrypt files are not touched") {
+		t.Fatalf("existing certificate warning = %q", output)
+	}
+	app.close()
+}
+
+func TestCertificatePreflightRequiresGenerationPhraseWhenAbsent(t *testing.T) {
+	app := newTestApp()
+	planned := AdminOperation{Summary: "Generate upstream CertFP", Mutating: true}
+	app.admin.PendingOperation = &planned
+	app.processResult(adminResult{
+		Operation: AdminOperation{FollowUpKind: "cert-generate-preflight", Quiet: true},
+		Output:    "CertFP not set up\n",
+		Err:       errors.New("sojuctl failed: exit status 1"),
+	})
+	if app.admin.Confirm == nil || app.admin.Confirm.Operation.ConfirmPhrase != "GENERATE UPSTREAM CERTIFICATE" {
+		t.Fatalf("new certificate confirmation = %#v", app.admin.Confirm)
+	}
+	if !strings.Contains(strings.Join(app.admin.Output, "\n"), "No existing upstream SASL CertFP") {
+		t.Fatalf("missing no-certificate explanation: %#v", app.admin.Output)
+	}
+	app.close()
+}
+
+func TestCertificatePreflightFailsClosed(t *testing.T) {
+	app := newTestApp()
+	planned := AdminOperation{Summary: "Generate upstream CertFP", Mutating: true}
+	app.admin.PendingOperation = &planned
+	app.processResult(adminResult{
+		Operation: AdminOperation{FollowUpKind: "cert-generate-preflight", Quiet: true},
+		Output:    "permission denied\n",
+		Err:       errors.New("sojuctl failed: exit status 1"),
+	})
+	if app.admin.Confirm != nil || app.admin.PendingOperation != nil {
+		t.Fatalf("failed preflight allowed confirmation: confirm=%#v pending=%#v", app.admin.Confirm, app.admin.PendingOperation)
+	}
+	if !strings.Contains(strings.Join(app.admin.Output, "\n"), "blocked") && !strings.Contains(app.currentStatusLocked(), "blocked") {
+		t.Fatalf("failed preflight was not explained: output=%#v status=%q", app.admin.Output, app.currentStatusLocked())
 	}
 	app.close()
 }

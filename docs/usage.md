@@ -58,10 +58,15 @@ Soju uses three unrelated certificate concepts:
   hostname match, SHA-256 fingerprint, and chain length. The private key is
   never read.
 - **Upstream SASL certificate / CertFP** authenticates one user's connection to
-  an upstream IRC network. Replacing it requires typed confirmation.
+  an upstream IRC network. Before generation, the TUI checks for an existing
+  CertFP and displays its fingerprints. Creating and replacing use different
+  exact confirmation phrases; an inconclusive preflight blocks the mutation.
 - **Client device certificates** authenticate downstream IRC clients to Soju.
   Registration also requires `client-cert-auth true`. These actions are omitted
   when the running Soju version lacks the command.
+
+See [Certificate safety](certificates.md) for the complete mutation boundaries
+and production Let's Encrypt guidance.
 
 ## Controls
 
