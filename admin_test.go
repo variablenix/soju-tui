@@ -22,6 +22,9 @@ func TestAdminUserCreateUsesArgvAndRedactsPassword(t *testing.T) {
 	if !op.Mutating || len(op.Args) == 0 {
 		t.Fatalf("unexpected operation: %#v", op)
 	}
+	if op.CapabilityUser != "alice" {
+		t.Fatalf("created user was not retained for capability refresh: %#v", op)
+	}
 	if strings.Contains(op.Preview, "p@ss word") || !strings.Contains(op.Preview, "••••••") {
 		t.Fatalf("secret leaked in preview: %q", op.Preview)
 	}
@@ -30,6 +33,24 @@ func TestAdminUserCreateUsesArgvAndRedactsPassword(t *testing.T) {
 	}
 	if got := strings.Join(op.Args, " "); !strings.Contains(got, "p@ss word") {
 		t.Fatalf("password was not preserved as one argv value: %q", got)
+	}
+}
+
+func TestAdminUserCreateOmitsUnchangedDefaults(t *testing.T) {
+	form, err := newAdminForm("user-create")
+	if err != nil {
+		t.Fatal(err)
+	}
+	form.Fields[0].Value = "alice"
+	form.Fields[1].Value = "secret"
+	op, err := buildAdminOperation("/etc/soju/config", form)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, optional := range []string{"-admin", "-enabled", "-max-networks"} {
+		if containsArg(op.Args, optional) {
+			t.Fatalf("unchanged default %s was sent: %#v", optional, op.Args)
+		}
 	}
 }
 
@@ -169,6 +190,33 @@ func TestResetSASLRequiresTypedConfirmation(t *testing.T) {
 	}
 	if op.ConfirmPhrase != "RESET SASL" {
 		t.Fatalf("confirmation phrase = %q", op.ConfirmPhrase)
+	}
+}
+
+func TestCertificateGenerationUsesCompatibleDefaults(t *testing.T) {
+	form, err := newAdminForm("cert-generate")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := form.Fields[2].Value; got != "rsa" {
+		t.Fatalf("initial key type = %q, want rsa", got)
+	}
+	form.Fields[0].Value = "alice"
+	form.Fields[1].Value = "libera"
+	op, err := buildAdminOperation("/etc/soju/config", form)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if containsArg(op.Args, "-key-type") || containsArg(op.Args, "-bits") {
+		t.Fatalf("default key options should rely on Soju defaults: %#v", op.Args)
+	}
+	form.Fields[2].Value = "ed25519"
+	op, err = buildAdminOperation("/etc/soju/config", form)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !containsArg(op.Args, "-key-type") || containsArg(op.Args, "-bits") {
+		t.Fatalf("ed25519 options are invalid: %#v", op.Args)
 	}
 }
 

@@ -45,6 +45,7 @@ type AdminOperation struct {
 	FollowUpKind          string
 	TargetUser            string
 	TargetNetwork         string
+	CapabilityUser        string
 	Quiet                 bool
 }
 
@@ -67,8 +68,8 @@ type AdminState struct {
 }
 
 type AdminCapabilities struct {
-	Known              bool
-	DeviceCertificates bool
+	Known    bool
+	Commands map[string]bool
 }
 
 type adminResult struct {
@@ -102,8 +103,8 @@ func newAdminApp(backend *SojuCtl) *App {
 		done:    make(chan struct{}),
 		status:  "checking sojuctl admin socket...",
 	}
-	op := makeAdminOperation(backend.Config, "Detect Soju capabilities", []string{"help"}, nil, false, nil)
-	op.FollowUpKind = "startup-capabilities"
+	op := makeAdminOperation(backend.Config, "Detect global Soju capabilities", []string{"help"}, nil, false, nil)
+	op.FollowUpKind = "startup-global-help"
 	op.Quiet = true
 	a.requestOperation(op)
 	return a
@@ -156,24 +157,80 @@ func (a *App) processResult(result adminResult) {
 	if !result.Operation.Quiet && strings.TrimSpace(output) != "" {
 		a.admin.Output = append(a.admin.Output, strings.TrimRight(output, "\n"))
 	}
-	if result.Err != nil {
-		if isDeviceCertificateUnsupported(output) {
-			a.admin.Capabilities.Known = true
-			a.admin.Capabilities.DeviceCertificates = false
+	if result.Operation.FollowUpKind == "startup-global-help" {
+		if result.Err == nil {
+			a.admin.Capabilities.Commands = parseAdminCommandHelp(output)
+			op := makeAdminOperation(a.backend.Config, "Find a Soju user for capability detection", []string{"user", "status"}, nil, false, nil)
+			op.FollowUpKind = "startup-user-status"
+			op.Quiet = true
+			a.continueStartupLocked(op)
+			return
 		}
+		// Capability detection must fail closed: never advertise commands that
+		// the running server has not explicitly reported as available.
+		a.admin.Capabilities = AdminCapabilities{Known: true, Commands: make(map[string]bool)}
+		a.continueStartupLocked(a.serverStatusOperation())
+		return
+	}
+	if result.Operation.FollowUpKind == "startup-user-status" {
+		if result.Err == nil {
+			if username := parseFirstSojuUsername(output); username != "" {
+				op := makeAdminOperation(a.backend.Config, "Detect per-user Soju capabilities", []string{"user", "run", username, "help"}, nil, false, nil)
+				op.FollowUpKind = "startup-user-help"
+				op.Quiet = true
+				a.continueStartupLocked(op)
+				return
+			}
+		}
+		// With no users, expose only global and local actions. Creating the
+		// first user triggers another capability query without a restart.
+		a.admin.Capabilities.Known = true
+		a.continueStartupLocked(a.serverStatusOperation())
+		return
+	}
+	if result.Operation.FollowUpKind == "startup-user-help" {
+		if result.Err == nil {
+			if a.admin.Capabilities.Commands == nil {
+				a.admin.Capabilities.Commands = make(map[string]bool)
+			}
+			for command := range parseAdminCommandHelp(output) {
+				a.admin.Capabilities.Commands[command] = true
+			}
+			a.admin.Capabilities.Known = true
+		} else {
+			// Preserve the known global command set. Falling back to an unknown
+			// capability set would make every user-scoped action visible.
+			a.admin.Capabilities.Known = true
+		}
+		a.continueStartupLocked(a.serverStatusOperation())
+		return
+	}
+	if result.Operation.FollowUpKind == "post-create-user-help" {
+		if result.Err == nil {
+			if a.admin.Capabilities.Commands == nil {
+				a.admin.Capabilities.Commands = make(map[string]bool)
+			}
+			for command := range parseAdminCommandHelp(output) {
+				a.admin.Capabilities.Commands[command] = true
+			}
+			a.admin.Capabilities.Known = true
+		}
+		op := makeAdminOperation(a.backend.Config, "Refresh users", []string{"user", "status"}, []string{"user", "status"}, false, nil)
+		a.continueStartupLocked(op)
+		return
+	}
+	if result.Err != nil {
 		a.admin.Output = append(a.admin.Output, "ERROR: "+redactText(result.Err.Error(), result.Operation.Secrets))
 		if hint := sojuCtlFailureHint(output); hint != "" {
 			a.admin.Output = append(a.admin.Output, hint)
 		}
 		a.setStatusLocked("sojuctl operation failed", 0)
 	} else {
-		if result.Operation.FollowUpKind == "startup-capabilities" {
-			a.admin.Capabilities = parseAdminCapabilities(output)
-			op := makeAdminOperation(a.backend.Config, "Server status", []string{"server", "status"}, []string{"server", "status"}, false, nil)
-			a.setStatusLocked("capabilities detected; loading server status...", 0)
-			a.mu.Unlock()
-			a.requestOperation(op)
-			a.mu.Lock()
+		if result.Operation.CapabilityUser != "" {
+			op := makeAdminOperation(a.backend.Config, "Refresh per-user Soju capabilities", []string{"user", "run", result.Operation.CapabilityUser, "help"}, nil, false, nil)
+			op.FollowUpKind = "post-create-user-help"
+			op.Quiet = true
+			a.continueStartupLocked(op)
 			return
 		}
 		if result.Operation.FollowUpKind == "network-update" {
@@ -207,6 +264,17 @@ func (a *App) processResult(result adminResult) {
 		a.setStatusLocked("operation completed", 4*time.Second)
 	}
 	a.admin.Output = trimOutput(a.admin.Output)
+}
+
+func (a *App) serverStatusOperation() AdminOperation {
+	return makeAdminOperation(a.backend.Config, "Server status", []string{"server", "status"}, []string{"server", "status"}, false, nil)
+}
+
+func (a *App) continueStartupLocked(op AdminOperation) {
+	a.setStatusLocked("detecting supported Soju administration commands...", 0)
+	a.mu.Unlock()
+	a.requestOperation(op)
+	a.mu.Lock()
 }
 
 func trimOutput(output []string) []string {
