@@ -65,7 +65,9 @@ func handleUIEvent(screen tcell.Screen, app *App, event tcell.Event) bool {
 	case *tcell.EventResize:
 		screen.Sync()
 	case *tcell.EventKey:
-		handleAdminKeyEvent(app, event)
+		width, height := screen.Size()
+		_, _, contentWidth, contentHeight := adminContentGeometry(width, height)
+		handleAdminKeyEventWithViewport(app, event, contentWidth, contentHeight)
 	}
 	return false
 }
