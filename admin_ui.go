@@ -16,35 +16,33 @@ type adminBrandLine struct {
 }
 
 var fullAdminBrand = []adminBrandLine{
-	{text: `  ____   ___      _ _   _      _____ _   _ ___`, style: styleAccent},
-	{text: ` / ___| / _ \    | | | | |    |_   _| | | |_ _|`, style: styleAccent},
-	{text: ` \___ \| | | |_  | | | | |_____ | | | | | || |`, style: styleAccent},
-	{text: `  ___) | |_| | |_| | |_| |_____| | | | |_| || |`, style: styleAccent},
-	{text: ` |____/ \___/ \___/ \___/        |_|  \___/|___|`, style: styleAccent},
+	{text: ` SSSS   OOO   JJJJJ  U   U         ____`, style: styleAccent},
+	{text: `S      O   O    J    U   U        |    |`, style: styleAccent},
+	{text: ` SSS   O   O    J    U   U        |____|`, style: styleAccent},
+	{text: `    S  O   O  J J    U   U       /      \`, style: styleAccent},
+	{text: `SSSS    OOO    JJ     UUU      /          \`, style: styleAccent},
+	{text: `                              /            \`, style: styleInfo},
+	{text: `TTTTT  U   U  III            |              |`, style: styleInfo},
+	{text: `  T    U   U   I             |     SOJU     |`, style: styleInfo},
+	{text: `  T    U   U   I             |      TUI     |`, style: styleInfo},
+	{text: `  T    U   U   I             |              |`, style: styleInfo},
+	{text: `  T     UUU   III            |______________|`, style: styleInfo},
 	{text: "", style: styleMuted},
-	{text: `      __`, style: styleInfo},
-	{text: `     |  |`, style: styleInfo},
-	{text: `     |__|`, style: styleInfo},
-	{text: `    /    \`, style: styleInfo},
-	{text: `   /      \`, style: styleInfo},
-	{text: `  |  SOJU  |`, style: styleInfo},
-	{text: `  |  TUI   |`, style: styleInfo},
-	{text: `  |________|`, style: styleInfo},
-	{text: "", style: styleMuted},
-	{text: `SOJU-TUI ADMINISTRATION CONSOLE`, style: styleMuted},
+	{text: `       SOJU-TUI ADMINISTRATION CONSOLE`, style: styleMuted},
 }
 
 var compactAdminBrand = []adminBrandLine{
-	{text: `SOJU-TUI`, style: styleAccent},
-	{text: `   __`, style: styleInfo},
-	{text: `  |  |`, style: styleInfo},
-	{text: `  |__|`, style: styleInfo},
-	{text: ` /    \`, style: styleInfo},
-	{text: `/      \`, style: styleInfo},
-	{text: `| SOJU |`, style: styleInfo},
-	{text: `| TUI  |`, style: styleInfo},
-	{text: `|______|`, style: styleInfo},
-	{text: `ADMINISTRATION`, style: styleMuted},
+	{text: `   SOJU-TUI`, style: styleAccent},
+	{text: `      ____`, style: styleInfo},
+	{text: `     |    |`, style: styleInfo},
+	{text: `     |____|`, style: styleInfo},
+	{text: `    /      \`, style: styleInfo},
+	{text: `   /        \`, style: styleInfo},
+	{text: `  |   SOJU   |`, style: styleInfo},
+	{text: `  |   TUI    |`, style: styleInfo},
+	{text: `  |          |`, style: styleInfo},
+	{text: `  |__________|`, style: styleInfo},
+	{text: ` ADMINISTRATION`, style: styleMuted},
 }
 
 func handleAdminKeyEvent(app *App, event *tcell.EventKey) {
@@ -202,18 +200,29 @@ func drawAdminOutput(screen tcell.Screen, app *App, x, width, y, height int) {
 func drawAdminBrand(screen tcell.Screen, x, width, top, bottom int) {
 	availableHeight := bottom - top
 	brand := fullAdminBrand
-	if width < 58 || availableHeight < len(fullAdminBrand)+2 {
+	brandWidth := adminBrandWidth(brand)
+	if width < brandWidth+2 || availableHeight < len(fullAdminBrand)+2 {
 		brand = compactAdminBrand
+		brandWidth = adminBrandWidth(brand)
 	}
-	if width < 24 || availableHeight < len(brand)+1 {
+	if width < brandWidth || availableHeight < len(brand)+1 {
 		return
 	}
 	brandTop := top + (availableHeight-len(brand))/2
+	brandX := x + (width-brandWidth)/2
 	for index, line := range brand {
-		lineWidth := runewidth.StringWidth(line.text)
-		lineX := x + (width-lineWidth)/2
-		putClipped(screen, lineX, brandTop+index, lineWidth, line.text, line.style)
+		putClipped(screen, brandX, brandTop+index, brandWidth, line.text, line.style)
 	}
+}
+
+func adminBrandWidth(brand []adminBrandLine) int {
+	width := 0
+	for _, line := range brand {
+		if lineWidth := runewidth.StringWidth(line.text); lineWidth > width {
+			width = lineWidth
+		}
+	}
+	return width
 }
 
 func drawAdminHelp(screen tcell.Screen, app *App, x, width, y, height int) {
