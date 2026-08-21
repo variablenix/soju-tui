@@ -156,31 +156,43 @@ func TestMenuNavigationWrapsAndSupportsHomeEnd(t *testing.T) {
 	app.close()
 }
 
-func TestUnsupportedDeviceCertificateActionDoesNotExecute(t *testing.T) {
+func TestUnsupportedDeviceCertificateActionsAreOmitted(t *testing.T) {
 	app := newTestApp()
-	app.admin.Capabilities = AdminCapabilities{Known: true}
-	for index, item := range adminMenuItems() {
-		if item.Kind == "device-cert-status" {
-			app.adminActivateMenuLocked(index)
-			break
+	app.admin.Capabilities = AdminCapabilities{Known: true, Commands: map[string]bool{
+		"help":          true,
+		"server status": true,
+		"user status":   true,
+	}}
+	for _, item := range app.adminMenuItemsLocked() {
+		if strings.HasPrefix(item.Kind, "device-cert-") {
+			t.Fatalf("unsupported device-certificate action remained visible: %#v", item)
 		}
-	}
-	if app.admin.Form != nil || app.admin.Busy {
-		t.Fatal("unsupported action must not open a form or execute sojuctl")
-	}
-	if len(app.admin.Output) == 0 || !strings.HasPrefix(app.admin.Output[len(app.admin.Output)-1], "UNAVAILABLE:") {
-		t.Fatalf("missing friendly unavailable message: %#v", app.admin.Output)
 	}
 	app.close()
 }
 
-func TestParseAdminCapabilities(t *testing.T) {
-	old := parseAdminCapabilities("network status\nserver status\n")
-	if !old.Known || old.DeviceCertificates {
-		t.Fatalf("unexpected old-server capabilities: %#v", old)
+func TestParseAdminCommandHelp(t *testing.T) {
+	commands := parseAdminCommandHelp("available commands: help, network status, server status\n")
+	for _, command := range []string{"help", "network status", "server status"} {
+		if !commands[command] {
+			t.Fatalf("command %q missing from %#v", command, commands)
+		}
 	}
-	current := parseAdminCapabilities("device-certificate status\ndevice-certificate create\n")
-	if !current.Known || !current.DeviceCertificates {
-		t.Fatalf("unexpected current-server capabilities: %#v", current)
+	if commands["device-certificate status"] {
+		t.Fatalf("unexpected device-certificate command in %#v", commands)
+	}
+}
+
+func TestParseAdminCommandHelpRejectsUnexpectedOutput(t *testing.T) {
+	commands := parseAdminCommandHelp("permission denied\nnetwork create")
+	if len(commands) != 0 {
+		t.Fatalf("unexpected output produced capabilities: %#v", commands)
+	}
+}
+
+func TestParseFirstSojuUsername(t *testing.T) {
+	output := "2/2 users\nak (admin): 3 networks\nakmobile: 2 networks\n"
+	if got := parseFirstSojuUsername(output); got != "ak" {
+		t.Fatalf("username = %q, want ak", got)
 	}
 }

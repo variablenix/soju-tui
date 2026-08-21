@@ -19,6 +19,11 @@ instance through the local `sojuctl` command:
 - read-only inspection of the TLS certificate configured for the Soju host;
 - downstream client-device certificate registration when Soju enables it.
 
+At startup, the TUI reads BouncerServ help in both the global administrator
+context and an existing user's context. The menu contains only commands that
+the running Soju server reports as supported, so older installations do not
+show actions they cannot execute.
+
 Every mutating operation stops at a confirmation screen showing the exact
 redacted `sojuctl` command. Ordinary changes require `y`; destructive and
 high-risk changes require an exact displayed phrase such as `RESET SASL`.
@@ -161,8 +166,8 @@ Soju uses three separate certificate concepts:
 - **Client device certificates** authenticate downstream IRC clients to Soju.
   Registration requires `client-cert-auth true` in the Soju configuration.
   They are unrelated to the certificate presented by the Soju host. The TUI
-  detects older Soju versions that lack `device-certificate` and marks those
-  menu actions with `×` instead of running unsupported commands.
+  omits these menu actions when the running Soju version does not provide the
+  `device-certificate` command.
 
 ## Controls
 

@@ -8,65 +8,84 @@ import (
 )
 
 type AdminMenuItem struct {
-	Label string
-	Kind  string
+	Label   string
+	Kind    string
+	Command string
 }
 
-func parseAdminCapabilities(help string) AdminCapabilities {
-	capabilities := AdminCapabilities{Known: true}
-	for _, line := range strings.Split(help, "\n") {
-		fields := strings.Fields(line)
-		if len(fields) > 0 && fields[0] == "device-certificate" {
-			capabilities.DeviceCertificates = true
-			break
+func parseAdminCommandHelp(help string) map[string]bool {
+	commands := make(map[string]bool)
+	lower := strings.ToLower(help)
+	marker := "available commands:"
+	index := strings.Index(lower, marker)
+	if index < 0 {
+		return commands
+	}
+	help = help[index+len(marker):]
+	for _, command := range strings.Split(strings.ReplaceAll(help, "\n", ","), ",") {
+		command = strings.TrimSpace(command)
+		if command != "" {
+			commands[command] = true
 		}
 	}
-	return capabilities
+	return commands
 }
 
-func (a *App) adminUnsupportedReasonLocked(kind string) string {
-	if !a.admin.Capabilities.Known {
-		return ""
-	}
-	switch kind {
-	case "device-cert-status", "device-cert-create", "device-cert-delete":
-		if !a.admin.Capabilities.DeviceCertificates {
-			return "This Soju server does not expose the device-certificate command. Upgrade Soju to use downstream client-certificate administration. This is separate from the host TLS certificate; use Server TLS certificate to inspect that certificate."
+var sojuUserStatusLine = regexp.MustCompile(`^([^[:space:]:]+)(?: \([^)]*\))?:`)
+
+func parseFirstSojuUsername(output string) string {
+	for _, line := range strings.Split(output, "\n") {
+		if match := sojuUserStatusLine.FindStringSubmatch(strings.TrimSpace(line)); len(match) == 2 {
+			return match[1]
 		}
 	}
 	return ""
+}
+
+func (a *App) adminMenuItemsLocked() []AdminMenuItem {
+	items := adminMenuItems()
+	if !a.admin.Capabilities.Known {
+		return items
+	}
+	filtered := make([]AdminMenuItem, 0, len(items))
+	for _, item := range items {
+		if item.Command == "" || a.admin.Capabilities.Commands[item.Command] {
+			filtered = append(filtered, item)
+		}
+	}
+	return filtered
 }
 
 var safeDisplayArg = regexp.MustCompile(`^[A-Za-z0-9_@+.,:/=-]+$`)
 
 func adminMenuItems() []AdminMenuItem {
 	return []AdminMenuItem{
-		{Label: "Server status", Kind: "server-status"},
+		{Label: "Server status", Kind: "server-status", Command: "server status"},
 		{Label: "Server TLS certificate", Kind: "server-tls-certificate"},
-		{Label: "List users", Kind: "user-status"},
-		{Label: "Create user", Kind: "user-create"},
-		{Label: "Update user", Kind: "user-update"},
-		{Label: "Delete user", Kind: "user-delete"},
-		{Label: "Network status for user", Kind: "network-status"},
-		{Label: "Create network for user", Kind: "network-create"},
-		{Label: "Update network for user", Kind: "network-update"},
-		{Label: "Delete network for user", Kind: "network-delete"},
-		{Label: "Send raw network command", Kind: "network-quote"},
-		{Label: "Channel status for user", Kind: "channel-status"},
-		{Label: "Create channel for user", Kind: "channel-create"},
-		{Label: "Update channel for user", Kind: "channel-update"},
-		{Label: "Delete channel for user", Kind: "channel-delete"},
-		{Label: "Generate upstream SASL certificate", Kind: "cert-generate"},
-		{Label: "Show upstream CertFP fingerprints", Kind: "cert-fingerprint"},
-		{Label: "Show SASL status", Kind: "sasl-status"},
-		{Label: "Set SASL PLAIN", Kind: "sasl-set-plain"},
-		{Label: "Reset SASL", Kind: "sasl-reset"},
-		{Label: "Client device certificates", Kind: "device-cert-status"},
-		{Label: "Register client device certificate", Kind: "device-cert-create"},
-		{Label: "Delete client device certificate", Kind: "device-cert-delete"},
-		{Label: "Broadcast server notice", Kind: "server-notice"},
-		{Label: "Toggle server debug", Kind: "server-debug"},
-		{Label: "BouncerServ help", Kind: "help"},
+		{Label: "List users", Kind: "user-status", Command: "user status"},
+		{Label: "Create user", Kind: "user-create", Command: "user create"},
+		{Label: "Update user", Kind: "user-update", Command: "user update"},
+		{Label: "Delete user", Kind: "user-delete", Command: "user delete"},
+		{Label: "Network status for user", Kind: "network-status", Command: "network status"},
+		{Label: "Create network for user", Kind: "network-create", Command: "network create"},
+		{Label: "Update network for user", Kind: "network-update", Command: "network update"},
+		{Label: "Delete network for user", Kind: "network-delete", Command: "network delete"},
+		{Label: "Send raw network command", Kind: "network-quote", Command: "network quote"},
+		{Label: "Channel status for user", Kind: "channel-status", Command: "channel status"},
+		{Label: "Create channel for user", Kind: "channel-create", Command: "channel create"},
+		{Label: "Update channel for user", Kind: "channel-update", Command: "channel update"},
+		{Label: "Delete channel for user", Kind: "channel-delete", Command: "channel delete"},
+		{Label: "Generate upstream SASL certificate", Kind: "cert-generate", Command: "certfp generate"},
+		{Label: "Show upstream CertFP fingerprints", Kind: "cert-fingerprint", Command: "certfp fingerprint"},
+		{Label: "Show SASL status", Kind: "sasl-status", Command: "sasl status"},
+		{Label: "Set SASL PLAIN", Kind: "sasl-set-plain", Command: "sasl set-plain"},
+		{Label: "Reset SASL", Kind: "sasl-reset", Command: "sasl reset"},
+		{Label: "Client device certificates", Kind: "device-cert-status", Command: "device-certificate status"},
+		{Label: "Register client device certificate", Kind: "device-cert-create", Command: "device-certificate create"},
+		{Label: "Delete client device certificate", Kind: "device-cert-delete", Command: "device-certificate delete"},
+		{Label: "Broadcast server notice", Kind: "server-notice", Command: "server notice"},
+		{Label: "Toggle server debug", Kind: "server-debug", Command: "server debug"},
+		{Label: "BouncerServ help", Kind: "help", Command: "help"},
 	}
 }
 
@@ -141,7 +160,7 @@ func (a *App) adminHandleKey(key string, r rune) {
 		a.adminFormKeyLocked(key, r)
 		return
 	}
-	items := adminMenuItems()
+	items := a.adminMenuItemsLocked()
 	switch key {
 	case "up":
 		if len(items) > 0 {
@@ -167,18 +186,11 @@ func (a *App) adminHandleKey(key string, r rune) {
 }
 
 func (a *App) adminActivateMenuLocked(cursor int) {
-	items := adminMenuItems()
+	items := a.adminMenuItemsLocked()
 	if cursor < 0 || cursor >= len(items) {
 		return
 	}
 	item := items[cursor]
-	if reason := a.adminUnsupportedReasonLocked(item.Kind); reason != "" {
-		a.admin.Output = append(a.admin.Output, "UNAVAILABLE: "+reason)
-		a.admin.Output = trimOutput(a.admin.Output)
-		a.admin.View = adminOutput
-		a.setStatusLocked("action unavailable on this Soju version", 0)
-		return
-	}
 	switch item.Kind {
 	case "server-status":
 		a.adminRequestReadOnlyLocked("Server status", []string{"server", "status"})
@@ -236,7 +248,11 @@ func newAdminForm(kind string) (*AdminForm, error) {
 		return field(label, "", false, false, "optional-bool", "Space cycles unset/true/false")
 	}
 	selectField := func(label, help string, options ...string) AdminField {
-		return AdminField{Label: label, Kind: "select", Help: help, Options: options}
+		value := ""
+		if len(options) > 0 {
+			value = options[0]
+		}
+		return AdminField{Label: label, Value: value, Original: value, Kind: "select", Help: help, Options: options}
 	}
 	userTarget := field("User", "", true, false, "text", "soju username")
 	networkTarget := field("Network", "", true, false, "text", "network name or address")
@@ -577,16 +593,23 @@ func buildAdminOperation(config string, form *AdminForm) (AdminOperation, error)
 			args = append(args, "-password", values["Password"])
 		}
 		secrets = append(secrets, values["Password"])
-		if err := boolArg(&args, "-admin", values["Admin"]); err != nil {
-			return AdminOperation{}, err
+		if values["Admin"] != "false" {
+			if err := boolArg(&args, "-admin", values["Admin"]); err != nil {
+				return AdminOperation{}, err
+			}
 		}
-		for _, pair := range [][2]string{{"-nick", "Nickname"}, {"-realname", "Realname"}, {"-max-networks", "Max networks"}} {
+		for _, pair := range [][2]string{{"-nick", "Nickname"}, {"-realname", "Realname"}} {
 			if values[pair[1]] != "" {
 				args = append(args, pair[0], values[pair[1]])
 			}
 		}
-		if err := boolArg(&args, "-enabled", values["Enabled"]); err != nil {
-			return AdminOperation{}, err
+		if values["Max networks"] != "" && values["Max networks"] != "-1" {
+			args = append(args, "-max-networks", values["Max networks"])
+		}
+		if values["Enabled"] != "true" {
+			if err := boolArg(&args, "-enabled", values["Enabled"]); err != nil {
+				return AdminOperation{}, err
+			}
 		}
 		if err := presenceFlag(&args, "-disable-password", values["Disable password"]); err != nil {
 			return AdminOperation{}, err
@@ -664,7 +687,13 @@ func buildAdminOperation(config string, form *AdminForm) (AdminOperation, error)
 		args = userRun(values["User"], "channel", "status", "-network", values["Network"])
 		refresh = args
 	case "cert-generate":
-		args = userRun(values["User"], "certfp", "generate", "-network", values["Network"], "-key-type", values["Key type"], "-bits", values["RSA bits"])
+		args = userRun(values["User"], "certfp", "generate", "-network", values["Network"])
+		if values["Key type"] != "" && values["Key type"] != "rsa" {
+			args = append(args, "-key-type", values["Key type"])
+		}
+		if (values["Key type"] == "" || values["Key type"] == "rsa") && values["RSA bits"] != "" && values["RSA bits"] != "3072" {
+			args = append(args, "-bits", values["RSA bits"])
+		}
 		refresh = userRun(values["User"], "network", "status")
 	case "cert-fingerprint":
 		mutating = false
@@ -742,6 +771,9 @@ func buildAdminOperation(config string, form *AdminForm) (AdminOperation, error)
 		if values["Debug"] == "true" {
 			op.ConfirmPhrase = "ENABLE DEBUG"
 		}
+	}
+	if form.Kind == "user-create" {
+		op.CapabilityUser = values["Username"]
 	}
 	if form.Kind == "user-delete" {
 		op.NeedsSojuConfirmation = true
