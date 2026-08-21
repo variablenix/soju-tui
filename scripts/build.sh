@@ -7,9 +7,12 @@ cd "$ROOT_DIR"
 TARGET=${TARGET:-linux-amd64}
 VERSION=${VERSION:-dev}
 PULL=0
+RELEASE=0
+ALLOW_UNSIGNED_TAG=0
 GO_BIN=${GO_BIN:-go}
 GO_TOOLCHAIN=${GOTOOLCHAIN:-local}
 REVISION=${REVISION:-}
+BUILT_ARTIFACTS=
 
 log() {
 	printf '[soju-tui] %s\n' "$1"
@@ -21,7 +24,7 @@ go_cmd() {
 
 usage() {
 	cat <<'EOF'
-Usage: scripts/build.sh [--target TARGET] [--version VERSION] [--pull]
+Usage: scripts/build.sh [--target TARGET] [--version VERSION] [--pull] [--release]
 
 TARGET values:
   host         Build for the current Go host.
@@ -30,6 +33,10 @@ TARGET values:
   all          Build both supported Linux targets.
 
 --pull performs a fast-forward-only git pull before verification and build.
+--release requires a clean exact vVERSION tag, builds both Linux targets, and
+          refuses development version strings.
+--allow-unsigned-tag permits an unsigned release tag for private test builds;
+          production releases should not use it.
 EOF
 }
 
@@ -47,6 +54,14 @@ while [ "$#" -gt 0 ]; do
 			;;
 		--pull)
 			PULL=1
+			shift
+			;;
+		--release)
+			RELEASE=1
+			shift
+			;;
+		--allow-unsigned-tag)
+			ALLOW_UNSIGNED_TAG=1
 			shift
 			;;
 		-h|--help)
@@ -74,8 +89,7 @@ esac
 if [ -z "$REVISION" ]; then
 	if command -v git >/dev/null 2>&1 && git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
 		REVISION=$(git rev-parse --short=12 HEAD)
-		if ! git diff --quiet -- '*.go' go.mod go.sum 'scripts/*.sh' ||
-			! git diff --cached --quiet -- '*.go' go.mod go.sum 'scripts/*.sh'; then
+		if [ -n "$(git status --porcelain --untracked-files=normal)" ]; then
 			REVISION=$REVISION-dirty
 		fi
 	else
@@ -86,6 +100,29 @@ case "$REVISION" in
 *[!A-Za-z0-9._+-]*) echo "revision contains unsupported characters" >&2; exit 2 ;;
 esac
 
+if [ "$RELEASE" -eq 1 ]; then
+	[ "$TARGET" = all ] || { echo "--release requires --target all" >&2; exit 2; }
+	printf '%s\n' "$VERSION" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+([.-][A-Za-z0-9][A-Za-z0-9.-]*)?$' || {
+		echo "--release requires a numbered version such as 0.3.0" >&2
+		exit 2
+	}
+	case "$VERSION:$REVISION" in
+		*dev*|*dirty*|*unknown*) echo "release builds require a clean non-development revision" >&2; exit 2 ;;
+	esac
+	command -v git >/dev/null 2>&1 || { echo "git is required for a release build" >&2; exit 1; }
+	[ "$(git describe --exact-match --match "v$VERSION" 2>/dev/null || true)" = "v$VERSION" ] || {
+		echo "release build requires HEAD to be tagged v$VERSION" >&2
+		exit 2
+	}
+	if [ "$ALLOW_UNSIGNED_TAG" -ne 1 ] && ! git tag -v "v$VERSION" >/dev/null 2>&1; then
+		echo "release tag v$VERSION is not a valid signature from a trusted local Git key" >&2
+		echo "sign the production tag, or use --allow-unsigned-tag only for a private test build" >&2
+		exit 2
+	fi
+	export SOURCE_DATE_EPOCH
+	SOURCE_DATE_EPOCH=$(git show -s --format=%ct HEAD)
+fi
+
 log "toolchain policy: GOTOOLCHAIN=$GO_TOOLCHAIN"
 log "using $(go_cmd version)"
 log "build revision: $REVISION"
@@ -94,6 +131,8 @@ log "checking shell helpers"
 sh -n scripts/build.sh
 sh -n scripts/grant-admin-access.sh
 sh -n scripts/setup.sh
+sh -n scripts/test-soju-compat.sh
+sh -n scripts/check-coverage.sh
 log "downloading Go modules"
 if ! go_cmd mod download; then
 	if [ "$GO_TOOLCHAIN" = local ]; then
@@ -117,12 +156,15 @@ build_target() {
 	case "$target" in
 		host)
 		go_cmd build -buildvcs=false -trimpath -ldflags "$LDFLAGS" -o "dist/soju-tui" .
+		BUILT_ARTIFACTS="$BUILT_ARTIFACTS dist/soju-tui"
 		;;
 		linux-amd64)
 		CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go_cmd build -buildvcs=false -trimpath -ldflags "$LDFLAGS" -o "dist/soju-tui-linux-amd64" .
+		BUILT_ARTIFACTS="$BUILT_ARTIFACTS dist/soju-tui-linux-amd64"
 		;;
 		linux-arm64)
 		CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go_cmd build -buildvcs=false -trimpath -ldflags "$LDFLAGS" -o "dist/soju-tui-linux-arm64" .
+		BUILT_ARTIFACTS="$BUILT_ARTIFACTS dist/soju-tui-linux-arm64"
 		;;
 		*)
 			echo "unknown target: $target" >&2
@@ -145,4 +187,28 @@ case "$TARGET" in
 		;;
 esac
 
-echo "Built $TARGET version $VERSION in $ROOT_DIR/dist"
+sha256_file() {
+	if command -v sha256sum >/dev/null 2>&1; then
+		sha256sum "$1" | awk '{ print $1 }'
+	elif command -v shasum >/dev/null 2>&1; then
+		shasum -a 256 "$1" | awk '{ print $1 }'
+	else
+		echo "sha256sum or shasum is required to create the artifact manifest" >&2
+		exit 1
+	fi
+}
+
+{
+	printf 'version=%s\n' "$VERSION"
+	printf 'revision=%s\n' "$REVISION"
+	printf 'go=%s\n' "$(go_cmd version)"
+	printf 'target=%s\n' "$TARGET"
+} >dist/BUILDINFO
+BUILT_ARTIFACTS="$BUILT_ARTIFACTS dist/BUILDINFO"
+
+: >dist/SHA256SUMS
+for artifact in $BUILT_ARTIFACTS; do
+	printf '%s  %s\n' "$(sha256_file "$artifact")" "${artifact#dist/}" >>dist/SHA256SUMS
+done
+
+echo "Built $TARGET version $VERSION in $ROOT_DIR/dist with SHA256SUMS and BUILDINFO"

@@ -16,7 +16,7 @@ terminal library and does not use ncurses.
 | ncurses development/runtime library | Not required | Not required |
 | systemd and ACL tools | Not required by the TUI | Used only by the guided Linux socket-access setup |
 
-The tracked Linux AMD64 and ARM64 release artifacts are built with
+The Linux AMD64 and ARM64 artifacts produced by release builds use
 `CGO_ENABLED=0` and are statically linked. Select the artifact matching the
 host architecture.
 
@@ -58,8 +58,14 @@ checkout, so moving or deleting the checkout does not break it. Installation is
 atomic. The wizard skips the copy when its content and security metadata are
 already current, prompts immediately before replacing an existing regular
 file, and refuses symbolic-link, non-file, or insecure install destinations.
-It prints the selected build revision and verifies that the installed content
-fingerprint exactly matches the architecture-specific source artifact.
+It prints the selected build revision and verifies the selected and installed
+files with SHA-256. Repository artifacts are also checked against
+`dist/SHA256SUMS` before installation.
+
+Production setup rejects builds whose version reports `dev`, `dirty`, or
+`unknown`. For local testing only, explicitly opt in with
+`--allow-development-build`. This prevents an accidental development artifact
+from silently replacing the installed production command.
 
 ### Setup choices
 
@@ -70,7 +76,8 @@ Use the path that matches the host:
 - Existing managed installation: pull changes and rerun the same setup wizard;
   it skips an already-current binary and re-verifies socket access.
 - Locally built binary: build the matching target, then run
-  `./scripts/setup.sh --binary /absolute/path/to/soju-tui`.
+  `./scripts/setup.sh --binary /absolute/path/to/soju-tui`. Add
+  `--checksums /absolute/path/to/SHA256SUMS` when a manifest accompanies it.
 - Repository-only operation: use `./scripts/setup.sh --no-install`; completion
   prints the selected `dist/` path instead of installing a global command.
 - Custom command location: use
@@ -136,7 +143,7 @@ soju-tui -setup
 
 ## Updating or rerunning setup
 
-For updated tracked Linux artifacts, pull and rerun the same wizard:
+For updated Linux artifacts in the trusted checkout, pull and rerun the same wizard:
 
 ```sh
 git pull --ff-only
@@ -152,7 +159,7 @@ wizard once:
 
 ```sh
 GOTOOLCHAIN=auto ./scripts/build.sh --target linux-amd64
-./scripts/setup.sh
+./scripts/setup.sh --allow-development-build
 ```
 
 Use `linux-arm64` instead on an ARM64 host. A normal setup rerun does not alter
