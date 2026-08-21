@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -141,6 +142,9 @@ func serverTLSCertificateReport(configPath string, now time.Time) (string, error
 	}
 	if info.TLSCertPath == "" {
 		return "", fmt.Errorf("%s has no tls certificate directive", configPath)
+	}
+	if !filepath.IsAbs(info.TLSCertPath) {
+		return "", fmt.Errorf("TLS certificate path %q is relative and depends on Soju's process working directory; use an absolute tls path in %s so the TUI cannot inspect the wrong file", info.TLSCertPath, configPath)
 	}
 	data, err := os.ReadFile(info.TLSCertPath)
 	if err != nil {

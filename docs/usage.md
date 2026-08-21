@@ -6,6 +6,10 @@ At startup, the TUI asks BouncerServ for commands available globally and in a
 user context. Only supported actions are shown. An older Soju release therefore
 does not display operations it cannot perform.
 
+The shared administration surface of Soju v0.9.0 and v0.10.1 is explicitly
+covered by regression fixtures. See [Soju version compatibility](compatibility.md)
+for the tested package versions and limits.
+
 Certificate-related menu entries use blue as an informational category color.
 Red is reserved for actual errors and confirmation warnings.
 
@@ -52,6 +56,12 @@ field:
 Manual entry remains available because Soju may limit very large user listings.
 Bulk destructive changes are intentionally not provided: each mutation targets
 one reviewed user. Server notices are already server-wide.
+
+Soju prints usernames unquoted in `user status`. The TUI parser supports spaces
+and colons, but new usernames may not begin/end with whitespace or end in a
+status marker such as `(admin)` or `(disabled)`, because those forms cannot be
+rediscovered unambiguously from Soju's output. An unusual pre-existing account
+can still be entered manually.
 
 ## Operations
 

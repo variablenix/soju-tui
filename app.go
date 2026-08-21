@@ -53,6 +53,8 @@ type AdminOperation struct {
 	Quiet                 bool
 	CertificateState      string
 	CertificateReport     string
+	CompatibilityFallback []string
+	FallbackPreview       string
 }
 
 type AdminConfirmation struct {
@@ -72,7 +74,6 @@ type AdminState struct {
 	HelpScroll       int
 	Busy             bool
 	LastRefresh      []string
-	LastOperation    *AdminOperation
 	PendingOperation *AdminOperation
 	PendingBatch     []AdminOperation
 	BatchFailures    int
@@ -150,7 +151,6 @@ func (a *App) requestOperation(op AdminOperation) {
 	}
 	a.admin.Busy = true
 	a.admin.View = adminOutput
-	a.admin.LastOperation = &op
 	a.setStatusLocked("running sojuctl...", 0)
 	a.mu.Unlock()
 
@@ -422,6 +422,21 @@ func (a *App) processResult(result adminResult) {
 		a.setStatusLocked("certificate state revalidated; running confirmed generation...", 0)
 		return
 	}
+	if result.Err != nil && len(result.Operation.CompatibilityFallback) > 0 && isUnixSchemeCompatibilityError(output) {
+		fallback := result.Operation
+		fallback.Args = append([]string(nil), result.Operation.CompatibilityFallback...)
+		fallback.Preview = result.Operation.FallbackPreview
+		fallback.CompatibilityFallback = nil
+		fallback.FallbackPreview = ""
+		a.admin.Output = append(a.admin.Output,
+			"Soju rejected the stable unix:// spelling; retrying the equivalent irc+unix:// spelling advertised by this server.",
+		)
+		a.mu.Unlock()
+		a.requestOperation(fallback)
+		a.mu.Lock()
+		a.setStatusLocked("retrying with this Soju version's Unix-address spelling...", 0)
+		return
+	}
 	if result.Err != nil {
 		a.admin.Output = append(a.admin.Output, "ERROR: "+redactText(result.Err.Error(), result.Operation.Secrets))
 		if hint := sojuCtlFailureHint(output); hint != "" {
@@ -454,7 +469,7 @@ func (a *App) processResult(result adminResult) {
 			return
 		}
 		if result.Operation.NeedsSojuConfirmation {
-			if args, username, ok := parseUserDeleteConfirmation(output); ok {
+			if args, username, ok := parseUserDeleteConfirmation(output, result.Operation.TargetUser); ok {
 				followUp := makeAdminOperation(a.backend.Config, "Confirm deletion of user "+username, args, []string{"user", "status"}, true, nil)
 				followUp.ConfirmPhrase = "DELETE USER " + username
 				a.admin.Confirm = &AdminConfirmation{Operation: followUp}
@@ -463,6 +478,13 @@ func (a *App) processResult(result adminResult) {
 				a.admin.Output = trimOutput(a.admin.Output)
 				return
 			}
+			a.admin.Output = append(a.admin.Output,
+				"ERROR: Soju returned success without the expected user-deletion confirmation token.",
+				"Deletion was blocked; no follow-up command was sent.",
+			)
+			a.setStatusLocked("user deletion blocked by an unexpected confirmation response", 0)
+			a.admin.Output = trimOutput(a.admin.Output)
+			return
 		}
 		if len(result.Operation.Refresh) > 0 {
 			a.admin.LastRefresh = append([]string(nil), result.Operation.Refresh...)
