@@ -132,7 +132,8 @@ func sojuTUIHelp() []string {
 		"",
 		"NAVIGATION",
 		"  Up/Down: select an action     Home/End: first or last action",
-		"  Enter: open or advance       Space: cycle users, networks, channels, and choices",
+		"  PgUp/PgDn: scroll output      Enter: open or advance",
+		"  Space: cycle users, networks, channels, and choices",
 		"  Ctrl-S: preview a form       Esc: cancel or go back",
 		"  ? or F1: this help           q/Q/Ctrl-C/Ctrl-Q: confirm exit",
 		"",
@@ -236,11 +237,33 @@ func (a *App) adminHandleKey(key string, r rune) {
 		a.adminHelpKeyLocked(key)
 		return
 	}
+	if a.admin.View == adminOutput && a.admin.Form == nil && a.admin.Confirm == nil {
+		switch key {
+		case "pageup", "scroll-up":
+			a.admin.OutputScroll += adminOutputPageSize
+			a.setStatusLocked("viewing older output · PgDn returns toward the latest lines", 0)
+			return
+		case "pagedown", "scroll-down":
+			a.admin.OutputScroll -= adminOutputPageSize
+			if a.admin.OutputScroll < 0 {
+				a.admin.OutputScroll = 0
+			}
+			if a.admin.OutputScroll == 0 {
+				a.setStatusLocked("showing latest output", 3e9)
+			} else {
+				a.setStatusLocked("viewing newer output", 0)
+			}
+			return
+		}
+	}
 	if key == "help" || key == "?" {
 		a.adminShowHelpLocked()
 		return
 	}
 	items := a.adminMenuItemsLocked()
+	if a.admin.OutputScroll > 0 && (key == "home" || key == "end") {
+		a.admin.OutputScroll = 0
+	}
 	switch key {
 	case "up":
 		if len(items) > 0 {

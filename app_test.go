@@ -157,6 +157,27 @@ func TestMenuNavigationWrapsAndSupportsHomeEnd(t *testing.T) {
 	app.close()
 }
 
+func TestMainOutputPagingDoesNotChangeMenuSelection(t *testing.T) {
+	app := newTestApp()
+	defer app.close()
+	app.admin.View = adminOutput
+	app.admin.Output = []string{"line 1", "line 2", "line 3"}
+	app.admin.Cursor = 4
+	app.adminHandleKey("pageup", 0)
+	if app.admin.OutputScroll != adminOutputPageSize || app.admin.Cursor != 4 {
+		t.Fatalf("Page Up state = scroll %d cursor %d", app.admin.OutputScroll, app.admin.Cursor)
+	}
+	app.adminHandleKey("pagedown", 0)
+	if app.admin.OutputScroll != 0 || app.admin.Cursor != 4 {
+		t.Fatalf("Page Down state = scroll %d cursor %d", app.admin.OutputScroll, app.admin.Cursor)
+	}
+	app.adminHandleKey("pageup", 0)
+	app.adminHandleKey("end", 0)
+	if app.admin.OutputScroll != 0 || app.admin.Cursor != len(adminMenuItems())-1 {
+		t.Fatalf("End state = scroll %d cursor %d", app.admin.OutputScroll, app.admin.Cursor)
+	}
+}
+
 func TestStaticHelpIsOfflineAndAlwaysAvailable(t *testing.T) {
 	app := newTestApp()
 	defer app.close()
