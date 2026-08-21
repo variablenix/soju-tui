@@ -98,6 +98,13 @@ sojuctl -config /etc/soju/config user run USERNAME help
 
 Upgrade Soju when a required administration command is unavailable.
 
+## Older output or fingerprints are not visible
+
+The main output pane follows the newest lines by default. Press `Page Up` to
+scroll toward older output and `Page Down` to return toward the newest output.
+The footer identifies the current direction while scrolled. The menu's
+`↑`/`↓` keys still move the selected action; they do not scroll the output.
+
 ## Host certificate cannot be read
 
 **View Soju host TLS certificate** reads the public certificate path from the

@@ -31,6 +31,12 @@ fetches remote content.
 Inside help, use `↑`/`↓` for line scrolling, `Page Up`/`Page Down` for larger
 steps, `Home`/`End` to jump, and `Esc` or `?` to close it.
 
+On the main output screen, use `Page Up` to view older output and `Page Down`
+to move toward the newest output. `Shift`+`↑`/`↓` provides an additional
+scroll shortcut in terminals that preserve modified arrow keys. The footer
+changes to `PgUp older`/`PgDn newer` while viewing history. The menu's ordinary
+`↑`/`↓` selection remains available at all times.
+
 ## All users or a specific user
 
 Use **List users** to display Soju's current user listing. Before every
@@ -121,6 +127,8 @@ and production Let's Encrypt guidance.
 ## Controls
 
 - `↑`/`↓` — move through actions and wrap at either end
+- `Page Up`/`Page Down` — scroll the main output older/newer
+- `Shift`+`↑`/`↓` — scroll main output when supported by the terminal
 - `Home`/`End` — jump to the first or last action
 - `Enter` — open an action or advance a form
 - `Tab`/`Shift-Tab` — move between fields
