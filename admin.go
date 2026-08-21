@@ -165,6 +165,10 @@ func sojuTUIHelp() []string {
 }
 
 func (a *App) adminHandleKey(key string, r rune) {
+	a.adminHandleKeyWithViewport(key, r, adminDefaultHelpWidth, adminDefaultHelpHeight)
+}
+
+func (a *App) adminHandleKeyWithViewport(key string, r rune, helpWidth, helpHeight int) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	if a.admin.ExitConfirm {
@@ -234,7 +238,7 @@ func (a *App) adminHandleKey(key string, r rune) {
 		return
 	}
 	if a.admin.HelpOpen {
-		a.adminHelpKeyLocked(key)
+		a.adminHelpKeyLocked(key, helpWidth, helpHeight)
 		return
 	}
 	if a.admin.View == adminOutput && a.admin.Form == nil && a.admin.Confirm == nil {
@@ -342,8 +346,11 @@ func (a *App) adminShowHelpLocked() {
 	a.setStatusLocked("Soju-TUI help · Up/Down scrolls · Esc or ? closes", 0)
 }
 
-func (a *App) adminHelpKeyLocked(key string) {
-	last := len(sojuTUIHelp()) - 1
+func (a *App) adminHelpKeyLocked(key string, width, height int) {
+	last := adminHelpMaxScroll(width, height)
+	if a.admin.HelpScroll > last {
+		a.admin.HelpScroll = last
+	}
 	switch key {
 	case "help", "?", "esc":
 		a.admin.HelpOpen = false

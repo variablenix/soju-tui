@@ -29,7 +29,9 @@ and source URLs as plain text. It never launches a browser, invokes a shell, or
 fetches remote content.
 
 Inside help, use `↑`/`↓` for line scrolling, `Page Up`/`Page Down` for larger
-steps, `Home`/`End` to jump, and `Esc` or `?` to close it.
+steps, `Home`/`End` to jump, and `Esc` or `?` to close it. Scrolling stops at
+the first or last full page, so the help pane does not advance into blank
+space.
 
 On the main output screen, use `Page Up` to view older output and `Page Down`
 to move toward the newest output. `Shift`+`↑`/`↓` provides an additional
