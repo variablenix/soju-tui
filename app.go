@@ -45,6 +45,7 @@ type AdminOperation struct {
 	FollowUpKind          string
 	TargetUser            string
 	TargetNetwork         string
+	Quiet                 bool
 }
 
 type AdminConfirmation struct {
@@ -62,6 +63,12 @@ type AdminState struct {
 	Busy          bool
 	LastRefresh   []string
 	LastOperation *AdminOperation
+	Capabilities  AdminCapabilities
+}
+
+type AdminCapabilities struct {
+	Known              bool
+	DeviceCertificates bool
 }
 
 type adminResult struct {
@@ -95,11 +102,10 @@ func newAdminApp(backend *SojuCtl) *App {
 		done:    make(chan struct{}),
 		status:  "checking sojuctl admin socket...",
 	}
-	a.requestOperation(AdminOperation{
-		Summary: "Server status",
-		Args:    []string{"server", "status"},
-		Refresh: []string{"server", "status"},
-	})
+	op := makeAdminOperation(backend.Config, "Detect Soju capabilities", []string{"help"}, nil, false, nil)
+	op.FollowUpKind = "startup-capabilities"
+	op.Quiet = true
+	a.requestOperation(op)
 	return a
 }
 
@@ -123,8 +129,10 @@ func (a *App) requestOperation(op AdminOperation) {
 		a.mu.Unlock()
 		return
 	}
-	a.admin.Output = append(a.admin.Output, "> "+op.Preview)
-	a.admin.Output = trimOutput(a.admin.Output)
+	if !op.Quiet {
+		a.admin.Output = append(a.admin.Output, "> "+op.Preview)
+		a.admin.Output = trimOutput(a.admin.Output)
+	}
 	a.admin.Busy = true
 	a.admin.View = adminOutput
 	a.admin.LastOperation = &op
@@ -145,16 +153,29 @@ func (a *App) processResult(result adminResult) {
 	defer a.mu.Unlock()
 	a.admin.Busy = false
 	output := redactText(result.Output, result.Operation.Secrets)
-	if strings.TrimSpace(output) != "" {
+	if !result.Operation.Quiet && strings.TrimSpace(output) != "" {
 		a.admin.Output = append(a.admin.Output, strings.TrimRight(output, "\n"))
 	}
 	if result.Err != nil {
+		if isDeviceCertificateUnsupported(output) {
+			a.admin.Capabilities.Known = true
+			a.admin.Capabilities.DeviceCertificates = false
+		}
 		a.admin.Output = append(a.admin.Output, "ERROR: "+redactText(result.Err.Error(), result.Operation.Secrets))
 		if hint := sojuCtlFailureHint(output); hint != "" {
 			a.admin.Output = append(a.admin.Output, hint)
 		}
 		a.setStatusLocked("sojuctl operation failed", 0)
 	} else {
+		if result.Operation.FollowUpKind == "startup-capabilities" {
+			a.admin.Capabilities = parseAdminCapabilities(output)
+			op := makeAdminOperation(a.backend.Config, "Server status", []string{"server", "status"}, []string{"server", "status"}, false, nil)
+			a.setStatusLocked("capabilities detected; loading server status...", 0)
+			a.mu.Unlock()
+			a.requestOperation(op)
+			a.mu.Lock()
+			return
+		}
 		if result.Operation.FollowUpKind == "network-update" {
 			network, err := findNetworkStatus(output, result.Operation.TargetNetwork)
 			if err != nil {

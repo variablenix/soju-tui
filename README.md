@@ -5,6 +5,8 @@ bouncer](https://soju.im/). It is not an IRC client: it does not connect to
 IRC, open chat buffers, display messages, or manage live conversations. Channel
 status and configuration are exposed only as administrative data.
 
+![soju-tui administration interface](soju-tui.png)
+
 It provides a keyboard-driven interface for managing the running soju
 instance through the local `sojuctl` command:
 
@@ -13,7 +15,7 @@ instance through the local `sojuctl` command:
 - per-user network status, creation, updates, deletion, and raw upstream commands;
 - per-user channel status, creation, updates, and deletion;
 - upstream certificate generation and fingerprints;
-- upstream SASL status, PLAIN credentials, and reset.
+- upstream SASL status, PLAIN credentials, and reset;
 - read-only inspection of the TLS certificate configured for the Soju host;
 - downstream client-device certificate registration when Soju enables it.
 
@@ -21,6 +23,41 @@ Every mutating operation stops at a confirmation screen showing the exact
 redacted `sojuctl` command. Ordinary changes require `y`; destructive and
 high-risk changes require an exact displayed phrase such as `RESET SASL`.
 Read-only operations execute immediately and never require confirmation.
+
+## First-time setup on a Debian host
+
+Soju must already be running with an administrative listener in
+`/etc/soju/config`:
+
+```text
+listen unix+admin://
+```
+
+From the repository, run the guided setup once:
+
+```sh
+./scripts/setup.sh
+```
+
+The wizard shows what it detected before making changes. It requests `sudo`,
+authorizes the current Linux user for the Soju admin socket, installs the ACL
+utility only when needed and approved, and verifies `sojuctl`. Preview the
+entire process without changing the host with:
+
+```sh
+./scripts/setup.sh --dry-run
+```
+
+Then run the binary as your regular user:
+
+```sh
+./dist/soju-tui-linux-amd64
+```
+
+Use `soju-tui-linux-arm64` on an ARM64 host. The first launch displays the
+discovered Linux user, Soju hostname/title, admin socket, TLS certificate,
+configuration path, and `sojuctl` path. Confirm that review to save the local
+non-secret profile. Use `-setup` whenever you want to review it again.
 
 ## How it works
 
@@ -33,20 +70,9 @@ TUI as a user with that permission, or configure the service socket's group or
 ACL for the administrator who will run the TUI. The program does not silently
 invoke `sudo`.
 
-Soju deliberately creates the admin socket with mode `0600`. On first use,
-run the setup wizard from the repository:
-
-```sh
-./scripts/setup.sh
-```
-
-The wizard requests `sudo`, detects the invoking Linux user, reads the admin
-socket from `/etc/soju/config`, offers to install the ACL utility if needed,
-previews the persistent systemd configuration, asks for confirmation, and
-verifies `sojuctl` as the local user. It applies a per-user ACL and installs a
-small systemd path unit that reapplies the ACL when soju recreates the socket.
-It never makes the socket world-writable. Use `./scripts/setup.sh --dry-run` to
-preview the setup without changing the host.
+Soju deliberately creates the admin socket with mode `0600`. The setup wizard
+applies a per-user ACL and installs a small systemd path unit that reapplies the
+ACL when Soju recreates the socket. It never makes the socket world-writable.
 
 The generated service is intentionally `Type=oneshot`: after a successful run,
 `soju-tui-admin-access.service` is inactive while
@@ -60,11 +86,7 @@ systemctl status soju-tui-admin-access.path
 `scripts/grant-admin-access.sh` remains available as the lower-level helper for
 custom automation.
 
-The first TUI run then reads `/etc/soju/config` and displays the discovered
-local Linux user, Soju hostname/title, admin socket, server certificate,
-configuration path, and `sojuctl` path. Nothing is saved until the user confirms
-the review. Run with `-setup` to review and replace the local profile later.
-`-accept-config` exists for deliberate non-interactive provisioning.
+`-accept-config` is available only for deliberate non-interactive provisioning.
 
 Passwords are not saved in the TUI profile. They are passed to `sojuctl` only
 for the operation that needs them and are redacted from the TUI preview and
@@ -80,7 +102,7 @@ This follows soju's documented `sojuctl` and BouncerServ model:
 
 ## Run
 
-The normal invocation on a Debian VPS is:
+The normal invocation on a Debian host is:
 
 ```sh
 ./dist/soju-tui-linux-amd64
@@ -138,11 +160,14 @@ Soju uses three separate certificate concepts:
   key and therefore requires a typed confirmation.
 - **Client device certificates** authenticate downstream IRC clients to Soju.
   Registration requires `client-cert-auth true` in the Soju configuration.
-  They are unrelated to the certificate presented by the Soju host.
+  They are unrelated to the certificate presented by the Soju host. The TUI
+  detects older Soju versions that lack `device-certificate` and marks those
+  menu actions with `×` instead of running unsupported commands.
 
 ## Controls
 
-- `↑`/`↓` — select an administration action;
+- `↑`/`↓` — select an administration action, wrapping at either end;
+- `Home`/`End` — jump to the first or last action;
 - `Enter` — open an action or advance a form;
 - `Tab`/`Shift-Tab` — move between form fields;
 - `Space` — cycle booleans and select fields;
@@ -162,7 +187,7 @@ The source requires Go 1.26.6 or newer so release builds include the standard
 library fix for GO-2026-5972. The helper runs tests and vet before building and
 writes binaries under `dist/`.
 
-For normal source updates on your x86_64 VPS (no version bump required):
+For normal source updates on an x86_64 host (no version bump required):
 
 ```sh
 ./scripts/build.sh --target linux-amd64
