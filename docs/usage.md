@@ -9,6 +9,13 @@ does not display operations it cannot perform.
 Certificate-related menu entries use blue as an informational category color.
 Red is reserved for actual errors and confirmation warnings.
 
+The sidebar identifies the program as **Managing Soju via sojuctl**. This
+describes the active control path accurately without implying that the TUI opens
+or monitors an IRC chat connection. When the output pane has unused room, it
+displays a Soju-TUI wordmark and ASCII bottle. A compact mark is used on medium
+terminals, and all decorative branding is omitted when command output or
+terminal dimensions need the space.
+
 ## All users or a specific user
 
 Use **List users** to display Soju's current user listing. Before every
