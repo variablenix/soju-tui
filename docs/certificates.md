@@ -48,7 +48,9 @@ This makes it safe to use alongside an automated Let's Encrypt renewal hook.
 Soju for one user and one upstream IRC network. It does not use the hostname in
 the Soju config and never touches the host TLS files.
 
-The TUI asks for the exact saved network name and runs the equivalent of:
+The TUI discovers saved networks after the user is selected. Choose one with
+`Space` (or type a specific target if Soju truncated the listing), then it runs
+the equivalent of:
 
 ```sh
 sojuctl -config /etc/soju/config user run USER certfp generate -network NETWORK
@@ -75,6 +77,12 @@ Replacing an existing CertFP changes upstream SASL EXTERNAL credentials. The
 IRC account may need the new fingerprint registered with NickServ, and the
 network may reconnect. Keep the previous fingerprint and a database backup
 until the new authentication is verified.
+
+**Show upstream CertFP fingerprints** can inspect one selected network or
+**All networks**. Soju's `certfp fingerprint` command is scoped to one network,
+so the all-network view safely runs one read-only request per discovered
+network. Results are separated by network and a missing CertFP is shown as
+**Not configured** rather than treated as a failed batch.
 
 ## Downstream device certificates
 

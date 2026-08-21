@@ -185,6 +185,15 @@ func drawAdminOutput(screen tcell.Screen, app *App, x, width, y, height int) {
 		if strings.HasPrefix(text, "> ") {
 			style = styleAccent
 		}
+		if strings.HasPrefix(text, "UPSTREAM CERTFP FINGERPRINTS FOR USER:") || strings.HasPrefix(text, "CERTFP NETWORK:") {
+			style = styleAccent
+		}
+		if strings.Contains(lower, "fingerprint:") {
+			style = styleInfo
+		}
+		if strings.HasPrefix(text, "  Not configured") || strings.HasPrefix(text, "──") {
+			style = styleMuted
+		}
 		if strings.Contains(strings.ToUpper(text), "CERTIFICATE") && !strings.HasPrefix(text, "ERROR:") {
 			style = styleInfo
 		}
@@ -298,7 +307,7 @@ func drawAdminForm(screen tcell.Screen, app *App, x, width, y, height int) {
 		if field.Secret && value != "" {
 			value = strings.Repeat("•", len([]rune(value)))
 		}
-		if field.Kind == "user" && len(field.Options) > 0 {
+		if (field.Kind == "user" || field.Kind == "network" || field.Kind == "channel") && len(field.Options) > 0 {
 			choice := "custom"
 			for index, option := range field.Options {
 				if value == option {

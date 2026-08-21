@@ -349,6 +349,83 @@ func TestUserTargetActionHandlesEmptyInstance(t *testing.T) {
 	app.close()
 }
 
+func TestNetworkTargetedActionDiscoversNetworksBeforeOpening(t *testing.T) {
+	app := newTestApp()
+	defer app.close()
+	if err := app.adminOpenFormWithUsersLocked("cert-fingerprint", []string{"alice", "bob"}); err != nil {
+		t.Fatal(err)
+	}
+	if app.admin.Form == nil || app.admin.Form.Kind != "network-discovery" || app.admin.Form.TargetKind != "cert-fingerprint" {
+		t.Fatalf("discovery form = %#v", app.admin.Form)
+	}
+	app.processResult(adminResult{
+		Operation: AdminOperation{FollowUpKind: "open-network-form", FormKind: "cert-fingerprint", TargetUser: "alice", Quiet: true},
+		Output:    "libera (ircs://irc.libera.chat:6697) [connected]: 4 channels\nouch (ircs://irc.ouch.chat:6697) [connected]: 2 channels\n",
+	})
+	if app.admin.Form == nil || app.admin.Form.Kind != "cert-fingerprint" {
+		t.Fatalf("target form = %#v", app.admin.Form)
+	}
+	network := app.admin.Form.Fields[1]
+	if network.Kind != "network" || network.Value != allNetworksSelection || len(network.Options) != 3 || network.Options[1] != "libera" {
+		t.Fatalf("network selector = %#v", network)
+	}
+}
+
+func TestChannelUpdateDiscoveryAndPrefill(t *testing.T) {
+	app := newTestApp()
+	defer app.close()
+	app.processResult(adminResult{
+		Operation: AdminOperation{FollowUpKind: "open-network-form", FormKind: "channel-update", TargetUser: "alice", Quiet: true},
+		Output:    "libera (ircs://irc.libera.chat:6697) [connected]: 2 channels\n",
+	})
+	if app.admin.Form == nil || app.admin.Form.Kind != "channel-discovery" || app.admin.Form.Fields[1].Value != "libera" {
+		t.Fatalf("network discovery result = %#v", app.admin.Form)
+	}
+	app.processResult(adminResult{
+		Operation: AdminOperation{FollowUpKind: "open-channel-form", FormKind: "channel-update", TargetUser: "alice", TargetNetwork: "libera", Quiet: true},
+		Output:    "#chat [joined]\n#ops [parted, detached]\n",
+	})
+	if app.admin.Form == nil || app.admin.Form.Kind != "channel-update-lookup" || app.admin.Form.Fields[2].Kind != "channel" || len(app.admin.Form.Fields[2].Options) != 2 {
+		t.Fatalf("channel selector = %#v", app.admin.Form)
+	}
+	app.processResult(adminResult{
+		Operation: AdminOperation{FollowUpKind: "channel-update", TargetUser: "alice", TargetNetwork: "libera", TargetChannel: "#ops", Quiet: true},
+		Output:    "#chat [joined]\n#ops [parted, detached]\n",
+	})
+	if app.admin.Form == nil || app.admin.Form.Kind != "channel-update" {
+		t.Fatalf("update form = %#v", app.admin.Form)
+	}
+	if got := app.admin.Form.Fields[3]; got.Label != "Detached" || got.Value != "true" || got.Original != "true" {
+		t.Fatalf("prefilled detached field = %#v", got)
+	}
+	if got := app.admin.Form.Fields[4]; got.Value != "" || !strings.Contains(got.Help, "blank keeps current") {
+		t.Fatalf("undisclosed field = %#v", got)
+	}
+}
+
+func TestCertFingerprintBatchFormatsConfiguredAndMissingNetworks(t *testing.T) {
+	app := newTestApp()
+	defer app.close()
+	app.processResult(adminResult{
+		Operation: AdminOperation{FollowUpKind: "cert-fingerprint-batch", TargetNetwork: "libera", Quiet: true},
+		Output:    "SHA-256 fingerprint: AA:BB\n",
+	})
+	app.processResult(adminResult{
+		Operation: AdminOperation{FollowUpKind: "cert-fingerprint-batch", TargetNetwork: "ouch", Quiet: true},
+		Output:    "CertFP not set up\n",
+		Err:       errors.New("sojuctl failed: exit status 1"),
+	})
+	output := strings.Join(app.admin.Output, "\n")
+	for _, want := range []string{"CERTFP NETWORK: libera", "SHA-256 fingerprint: AA:BB", "CERTFP NETWORK: ouch", "Not configured"} {
+		if !strings.Contains(output, want) {
+			t.Fatalf("batch output missing %q: %s", want, output)
+		}
+	}
+	if app.admin.BatchFailures != 0 {
+		t.Fatalf("unconfigured CertFP counted as a batch failure: %d", app.admin.BatchFailures)
+	}
+}
+
 func TestCertificatePreflightRequiresReplacementPhraseWhenExisting(t *testing.T) {
 	app := newTestApp()
 	planned := AdminOperation{Summary: "Generate upstream CertFP", Mutating: true}
