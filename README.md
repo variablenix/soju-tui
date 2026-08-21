@@ -18,6 +18,8 @@ it is not an IRC chat client and never opens channels or displays messages.
 - Use a responsive Soju-TUI bottle wordmark without crowding command output.
 - Run from static Linux AMD64 or ARM64 binaries without Go or ncurses.
 
+![Soju-TUI administration interface](soju-tui-screen.png)
+
 ## Quick start
 
 Soju must already be running with an administrative listener:
