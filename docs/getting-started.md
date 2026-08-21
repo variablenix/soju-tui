@@ -49,16 +49,25 @@ atomic. The wizard skips the copy when its content and security metadata are
 already current, prompts before replacing an existing regular file, and
 refuses symbolic-link, non-file, or insecure install destinations.
 
-Useful system-setup options:
+### Setup choices
 
-```sh
-./scripts/setup.sh --binary /absolute/path/to/soju-tui
-./scripts/setup.sh --install-path /opt/local/bin/soju-tui
-./scripts/setup.sh --no-install
-```
+Use the path that matches the host:
 
-`--no-install` retains the repository-only workflow and prints the selected
-binary path at completion.
+- Standard first installation: preview with `./scripts/setup.sh --dry-run`,
+  apply with `./scripts/setup.sh`, then run `soju-tui`.
+- Existing managed installation: pull changes and rerun the same setup wizard;
+  it skips an already-current binary and re-verifies socket access.
+- Locally built binary: build the matching target, then run
+  `./scripts/setup.sh --binary /absolute/path/to/soju-tui`.
+- Repository-only operation: use `./scripts/setup.sh --no-install`; completion
+  prints the selected `dist/` path instead of installing a global command.
+- Custom command location: use
+  `./scripts/setup.sh --install-path /opt/local/bin/soju-tui` with a trusted,
+  root-owned directory already included in the user's `PATH`.
+- Profile rediscovery only: run `soju-tui -setup` as the regular user. This
+  does not reinstall the command or change socket permissions.
+- Host without systemd: follow [Other Unix-like systems](#other-unix-like-systems)
+  and configure equivalent admin-socket access with the native service manager.
 
 The setup path is tested on Debian. Package discovery also supports APT, DNF,
 YUM, Zypper, and Pacman environments. The persistent ACL helper requires
@@ -98,9 +107,7 @@ non-secret paths are stored in:
 ~/.config/soju-tui/admin.json
 ```
 
-The profile is mode `0600`. Re-run profile discovery at any time with
-`soju-tui -setup`. That flag only recreates the current user's non-secret TUI
-profile; it does not install a binary or change system permissions.
+The profile is mode `0600`.
 
 Useful overrides:
 

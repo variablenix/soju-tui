@@ -5,7 +5,47 @@ import (
 	"strings"
 
 	"github.com/gdamore/tcell/v2"
+	"github.com/mattn/go-runewidth"
 )
+
+const adminSidebarSubtitle = "Managing Soju via sojuctl"
+
+type adminBrandLine struct {
+	text  string
+	style tcell.Style
+}
+
+var fullAdminBrand = []adminBrandLine{
+	{text: `  ____   ___      _ _   _      _____ _   _ ___`, style: styleAccent},
+	{text: ` / ___| / _ \    | | | | |    |_   _| | | |_ _|`, style: styleAccent},
+	{text: ` \___ \| | | |_  | | | | |_____ | | | | | || |`, style: styleAccent},
+	{text: `  ___) | |_| | |_| | |_| |_____| | | | |_| || |`, style: styleAccent},
+	{text: ` |____/ \___/ \___/ \___/        |_|  \___/|___|`, style: styleAccent},
+	{text: "", style: styleMuted},
+	{text: `      __`, style: styleInfo},
+	{text: `     |  |`, style: styleInfo},
+	{text: `     |__|`, style: styleInfo},
+	{text: `    /    \`, style: styleInfo},
+	{text: `   /      \`, style: styleInfo},
+	{text: `  |  SOJU  |`, style: styleInfo},
+	{text: `  |  TUI   |`, style: styleInfo},
+	{text: `  |________|`, style: styleInfo},
+	{text: "", style: styleMuted},
+	{text: `SOJU-TUI ADMINISTRATION CONSOLE`, style: styleMuted},
+}
+
+var compactAdminBrand = []adminBrandLine{
+	{text: `SOJU-TUI`, style: styleAccent},
+	{text: `   __`, style: styleInfo},
+	{text: `  |  |`, style: styleInfo},
+	{text: `  |__|`, style: styleInfo},
+	{text: ` /    \`, style: styleInfo},
+	{text: `/      \`, style: styleInfo},
+	{text: `| SOJU |`, style: styleInfo},
+	{text: `| TUI  |`, style: styleInfo},
+	{text: `|______|`, style: styleInfo},
+	{text: `ADMINISTRATION`, style: styleMuted},
+}
 
 func handleAdminKeyEvent(app *App, event *tcell.EventKey) {
 	key := ""
@@ -80,7 +120,7 @@ func drawAdminSidebar(screen tcell.Screen, app *App, width, height int) {
 		putClipped(screen, 0, y, width, " ", styleMuted)
 	}
 	putClipped(screen, 1, 1, width-1, "SOJU ADMINISTRATION", styleAccent)
-	putClipped(screen, 1, 2, width-1, "No IRC chat connection", styleMuted)
+	putClipped(screen, 1, 2, width-1, adminSidebarSubtitle, styleMuted)
 	items := app.adminMenuItemsLocked()
 	start := 0
 	visible := height - 4
@@ -110,6 +150,7 @@ func drawAdminSidebar(screen tcell.Screen, app *App, width, height int) {
 func drawAdminOutput(screen tcell.Screen, app *App, x, width, y, height int) {
 	if len(app.admin.Output) == 0 {
 		putClipped(screen, x, y, width, "No sojuctl output yet.", styleMuted)
+		drawAdminBrand(screen, x, width, y+2, y+height)
 		return
 	}
 	lines := make([]styledLine, 0, len(app.admin.Output))
@@ -142,6 +183,24 @@ func drawAdminOutput(screen tcell.Screen, app *App, x, width, y, height int) {
 		}
 		putClipped(screen, x, row, width, line.text, line.style)
 		row++
+	}
+	drawAdminBrand(screen, x, width, row+1, y+height)
+}
+
+func drawAdminBrand(screen tcell.Screen, x, width, top, bottom int) {
+	availableHeight := bottom - top
+	brand := fullAdminBrand
+	if width < 58 || availableHeight < len(fullAdminBrand)+2 {
+		brand = compactAdminBrand
+	}
+	if width < 24 || availableHeight < len(brand)+1 {
+		return
+	}
+	brandTop := top + (availableHeight-len(brand))/2
+	for index, line := range brand {
+		lineWidth := runewidth.StringWidth(line.text)
+		lineX := x + (width-lineWidth)/2
+		putClipped(screen, lineX, brandTop+index, lineWidth, line.text, line.style)
 	}
 }
 

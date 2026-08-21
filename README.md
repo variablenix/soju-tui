@@ -14,6 +14,7 @@ it is not an IRC chat client and never opens channels or displays messages.
 - Select from freshly discovered Soju users or enter a specific username.
 - Show only commands supported by the running Soju version.
 - Preview every mutation as a redacted `sojuctl` command before confirmation.
+- Use a responsive Soju-TUI bottle wordmark without crowding command output.
 - Run from static Linux AMD64 or ARM64 binaries without Go or ncurses.
 
 ## Quick start
