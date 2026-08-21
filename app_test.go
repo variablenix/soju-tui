@@ -222,8 +222,14 @@ func TestStaticHelpIsOfflineAndAlwaysAvailable(t *testing.T) {
 		t.Fatalf("help scroll = %d, want 1", app.admin.HelpScroll)
 	}
 	app.adminHandleKey("end", 0)
-	if app.admin.HelpScroll != len(sojuTUIHelp())-1 {
-		t.Fatalf("help End scroll = %d", app.admin.HelpScroll)
+	wantLastPage := adminHelpMaxScroll(adminDefaultHelpWidth, adminDefaultHelpHeight)
+	if app.admin.HelpScroll != wantLastPage {
+		t.Fatalf("help End scroll = %d, want %d", app.admin.HelpScroll, wantLastPage)
+	}
+	app.adminHandleKey("down", 0)
+	app.adminHandleKey("pagedown", 0)
+	if app.admin.HelpScroll != wantLastPage {
+		t.Fatalf("help scrolled past final page: got %d, want %d", app.admin.HelpScroll, wantLastPage)
 	}
 	app.adminHandleKey("home", 0)
 	app.adminHandleKey("?", '?')

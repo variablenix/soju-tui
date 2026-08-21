@@ -10,7 +10,11 @@ import (
 
 const adminSidebarSubtitle = "Managing Soju via sojuctl"
 
-const adminOutputPageSize = 8
+const (
+	adminOutputPageSize    = 8
+	adminDefaultHelpWidth  = 80
+	adminDefaultHelpHeight = 20
+)
 
 type adminBrandLine struct {
 	text  string
@@ -63,6 +67,10 @@ var compactAdminBrand = []adminBrandLine{
 }
 
 func handleAdminKeyEvent(app *App, event *tcell.EventKey) {
+	handleAdminKeyEventWithViewport(app, event, adminDefaultHelpWidth, adminDefaultHelpHeight)
+}
+
+func handleAdminKeyEventWithViewport(app *App, event *tcell.EventKey, helpWidth, helpHeight int) {
 	key := ""
 	switch event.Key() {
 	case tcell.KeyUp:
@@ -108,33 +116,28 @@ func handleAdminKeyEvent(app *App, event *tcell.EventKey) {
 			key = string(event.Rune())
 		}
 	}
-	app.adminHandleKey(key, event.Rune())
+	app.adminHandleKeyWithViewport(key, event.Rune(), helpWidth, helpHeight)
 }
 
 func drawAdminUI(screen tcell.Screen, app *App) {
 	width, height := screen.Size()
-	sidebarWidth := 38
-	if sidebarWidth > width/2 {
-		sidebarWidth = width / 3
-	}
+	sidebarWidth, contentX, contentWidth, contentHeight := adminContentGeometry(width, height)
 	header := fmt.Sprintf(" %s   ADMINISTRATION   sojuctl: %s", versionHeader(), app.backend.Path)
 	putClipped(screen, 0, 0, width, header, styleHeader)
 	drawAdminSidebar(screen, app, sidebarWidth, height-3)
 	for y := 1; y < height-2; y++ {
 		putClipped(screen, sidebarWidth, y, 1, "│", styleDivider)
 	}
-	contentX := sidebarWidth + 2
-	contentWidth := width - contentX - 1
 	if app.admin.ExitConfirm {
-		drawExitConfirmation(screen, app, contentX, contentWidth, 2, height-4)
+		drawExitConfirmation(screen, app, contentX, contentWidth, 2, contentHeight)
 	} else if app.admin.Confirm != nil {
-		drawAdminConfirmation(screen, app, contentX, contentWidth, 2, height-4)
+		drawAdminConfirmation(screen, app, contentX, contentWidth, 2, contentHeight)
 	} else if app.admin.Form != nil {
-		drawAdminForm(screen, app, contentX, contentWidth, 2, height-4)
+		drawAdminForm(screen, app, contentX, contentWidth, 2, contentHeight)
 	} else if app.admin.HelpOpen {
-		drawAdminHelp(screen, app, contentX, contentWidth, 2, height-4)
+		drawAdminHelp(screen, app, contentX, contentWidth, 2, contentHeight)
 	} else {
-		drawAdminOutput(screen, app, contentX, contentWidth, 2, height-4)
+		drawAdminOutput(screen, app, contentX, contentWidth, 2, contentHeight)
 	}
 	footer := " ↑↓ select  PgUp/PgDn scroll output  Enter open  ? help  r refresh  q quit"
 	if app.admin.View == adminOutput && app.admin.OutputScroll > 0 {
@@ -151,6 +154,17 @@ func drawAdminUI(screen tcell.Screen, app *App) {
 	putClipped(screen, 0, height-1, width, status, styleInput)
 	screen.HideCursor()
 	screen.Show()
+}
+
+func adminContentGeometry(width, height int) (sidebarWidth, contentX, contentWidth, contentHeight int) {
+	sidebarWidth = 38
+	if sidebarWidth > width/2 {
+		sidebarWidth = width / 3
+	}
+	contentX = sidebarWidth + 2
+	contentWidth = width - contentX - 1
+	contentHeight = height - 4
+	return
 }
 
 func drawAdminSidebar(screen tcell.Screen, app *App, width, height int) {
@@ -277,18 +291,41 @@ func adminBrandWidth(brand []adminBrandLine) int {
 }
 
 func drawAdminHelp(screen tcell.Screen, app *App, x, width, y, height int) {
-	lines := sojuTUIHelp()
+	lines := adminHelpLines(width)
 	start := app.admin.HelpScroll
 	if start < 0 {
 		start = 0
 	}
-	if start >= len(lines) {
-		start = len(lines) - 1
+	if maxScroll := adminHelpMaxScroll(width, height); start > maxScroll {
+		start = maxScroll
 	}
-	row := y
-	for index := start; index < len(lines) && row < y+height; index++ {
+	end := start + height
+	if end > len(lines) {
+		end = len(lines)
+	}
+	for index, line := range lines[start:end] {
+		putClipped(screen, x, y+index, width, line.text, line.style)
+	}
+}
+
+func adminHelpMaxScroll(width, height int) int {
+	if height <= 0 {
+		return 0
+	}
+	last := len(adminHelpLines(width)) - height
+	if last < 0 {
+		return 0
+	}
+	return last
+}
+
+func adminHelpLines(width int) []styledLine {
+	if width <= 1 {
+		width = adminDefaultHelpWidth
+	}
+	result := make([]styledLine, 0, len(sojuTUIHelp()))
+	for index, line := range sojuTUIHelp() {
 		style := styleNormal
-		line := lines[index]
 		if index == 0 || strings.ToUpper(line) == line && line != "" && !strings.Contains(line, "HTTPS://") {
 			style = styleAccent
 		}
@@ -296,13 +333,10 @@ func drawAdminHelp(screen tcell.Screen, app *App, x, width, y, height int) {
 			style = styleInfo
 		}
 		for _, wrapped := range wrapText(line, width) {
-			if row >= y+height {
-				break
-			}
-			putClipped(screen, x, row, width, wrapped, style)
-			row++
+			result = append(result, styledLine{text: wrapped, style: style})
 		}
 	}
+	return result
 }
 
 func drawAdminForm(screen tcell.Screen, app *App, x, width, y, height int) {
