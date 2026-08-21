@@ -95,7 +95,9 @@ SOCKET_DIR=${SOCKET_PATH%/*}
 SERVICE_PATH=$SYSTEMD_DIR/$UNIT_NAME.service
 PATH_PATH=$SYSTEMD_DIR/$UNIT_NAME.path
 TEMP_DIR=$(mktemp -d /tmp/soju-tui-admin-access.XXXXXX)
-[ -n "$TEMP_DIR" ] && [ -d "$TEMP_DIR" ] || fail "could not create a temporary directory"
+if [ -z "$TEMP_DIR" ] || [ ! -d "$TEMP_DIR" ]; then
+	fail "could not create a temporary directory"
+fi
 cleanup() {
 	rm -f "$TEMP_DIR/$UNIT_NAME.service" "$TEMP_DIR/$UNIT_NAME.path"
 	rmdir "$TEMP_DIR" 2>/dev/null || true
