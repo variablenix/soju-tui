@@ -1,171 +1,148 @@
 # soju-tui
 
-`soju-tui` is a terminal frontend for [soju](https://soju.im/): it provides the IRC conversation UI and an administrative UI for users, networks, channels, upstream SASL/certificates, server status, notices, and debug logging.
+`soju-tui` is an administration-only terminal frontend for the [soju IRC
+bouncer](https://soju.im/). It is not an IRC client: it does not connect to
+IRC, open chat buffers, display messages, or manage live conversations. Channel
+status and configuration are exposed only as administrative data.
 
-The administrative UI uses the authenticated `BouncerServ` interface over the existing IRC/TLS session. It does not invoke a shell, interpolate user input into shell syntax, or put passwords in a `sojuctl` process argument list. Read-only operations run immediately; every mutating operation stops at a confirmation screen showing the exact redacted operation before it is sent.
+It provides a keyboard-driven interface for managing the running soju
+instance through the local `sojuctl` command:
 
-It is written in Go and builds as one Linux binary. The terminal layer uses [tcell](https://github.com/gdamore/tcell), so the executable does not link to `libncurses`; a normal terminal and its terminfo entry are sufficient. On a minimal Debian installation, `ncurses-base` can be installed if the terminal reports an unknown `TERM`, but it is not a runtime library dependency of this program.
+- server status, notices, debug logging, and BouncerServ help;
+- user status, creation, updates, and deletion;
+- per-user network status, creation, updates, deletion, and raw upstream commands;
+- per-user channel status, creation, updates, and deletion;
+- upstream certificate generation and fingerprints;
+- upstream SASL status, PLAIN credentials, and reset.
 
-## Build
+Every mutating operation stops at a confirmation screen showing the exact
+redacted `sojuctl` command. Press `y` to execute it, or `n`/`Esc` to cancel.
+Read-only operations execute immediately.
 
-The source requires Go 1.23 or newer to build. On a Debian VPS with Go already installed:
+## How it works
 
-Use the helper script after pulling source updates:
+The TUI executes `sojuctl` with an argument vector. It never invokes a shell
+and never interpolates form values into shell syntax. `sojuctl` sends the
+administrative BouncerServ command through soju's `unix+admin://` socket.
 
-```sh
-./scripts/build.sh --target linux-amd64 --version 0.1.0
-```
+`sojuctl` itself requires write permission on the soju admin socket. Run the
+TUI as a user with that permission, or configure the service socket's group or
+ACL for the administrator who will run the TUI. The program does not silently
+invoke `sudo`.
 
-To fast-forward the checkout and then verify/build it:
+Passwords are not saved in the TUI profile. They are passed to `sojuctl` only
+for the operation that needs them and are redacted from the TUI preview and
+captured output. Because the upstream `sojuctl` interface accepts passwords as
+command arguments, the password can be visible briefly to same-host process
+inspection while that operation is running; use the socket permissions and
+host access controls accordingly.
 
-```sh
-./scripts/build.sh --pull --target linux-amd64
-```
+This follows soju's documented `sojuctl` and BouncerServ model:
 
-The script runs `go test ./...`, `go vet ./...`, downloads modules, and writes binaries under `dist/`. It never performs a non-fast-forward Git update.
+- [sojuctl manual](https://manpages.debian.org/unstable/soju/sojuctl.1.en.html)
+- [soju manual — configuration and IRC service](https://manpages.ubuntu.com/manpages/stonking/man1/soju.1.html)
 
-The helper prints each verification/build phase and defaults to
-`GOTOOLCHAIN=local`, so an installed Go version older than the required Go
-1.23 fails clearly instead of silently downloading another toolchain. Check
-the installed version with `go version`; use `GOTOOLCHAIN=auto` explicitly if
-automatic toolchain downloads are desired.
+## Run
 
-The Makefile remains available:
-
-```sh
-make build
-```
-
-Build outputs are written under `dist/`, so a host-native binary cannot be
-mistaken for the Linux deployment binary.
-
-For a build machine targeting a typical VPS:
-
-```sh
-make linux-amd64
-```
-
-The resulting binary is `dist/soju-tui-linux-amd64`.
-
-For ARM64 VPS hardware:
-
-```sh
-make linux-arm64
-```
-
-The resulting binary is `dist/soju-tui-linux-arm64`.
-
-Copy the resulting binary to the server and make it executable. The binary is built with `CGO_ENABLED=0`, so it does not need Go, ncurses, or other build tools after it has been copied.
-
-## Connect
-
-On first run, `soju-tui` checks `/etc/soju/config` for the first non-admin IRC
-listener. It ignores `unix+admin://`, asks whether to use the detected
-listener, and saves the selected server, port, TLS hostname, and username in
-the per-user profile. The password is never saved.
-
-For the Linux amd64 binary built on the VPS:
+The normal invocation on a Debian VPS is:
 
 ```sh
 ./dist/soju-tui-linux-amd64
 ```
 
-The profile is stored at `~/.config/soju-tui/config.json` on Linux with mode
-`0600`. Use `-setup` to run the wizard again, `-soju-config PATH` to inspect a
-different daemon configuration, or `-profile PATH` to use a different profile.
-
-The program prompts for the password without echoing it. A remote TLS listener
-can still be specified directly:
-
-```sh
-./dist/soju-tui-linux-amd64 -server irc.example.net:6697 -username alice
-```
-
-If soju listens on a local unencrypted port, explicitly disable TLS:
-
-```sh
-./dist/soju-tui-linux-amd64 -server 127.0.0.1:6667 -tls=false -username alice
-```
-
-If the listener is bound to a specific local address, such as
-`172.32.0.1:6697`, the setup wizard reads that address from `/etc/soju/config`.
-You can also provide it explicitly with `-server 172.32.0.1:6697`.
-
-The password can also be supplied through `SOJU_PASSWORD`, but an interactive prompt is safer than putting it in shell history or the process command line. Useful environment variables are `SOJU_SERVER`, `SOJU_USERNAME`, `SOJU_NICK`, `SOJU_REALNAME`, `SOJU_CLIENT`, `SOJU_NETWORK`, and `SOJU_TLS`.
-
-For a self-signed soju certificate, prefer installing/trusting the certificate. As a temporary alternative:
-
-```sh
-./dist/soju-tui-linux-amd64 -insecure-skip-verify
-```
-
-That option disables certificate verification and should not be used on an untrusted network.
-
-## Administration
-
-Log in with an administrator account without a `/network` suffix. Press `F2` to switch between chat and administration. The admin dashboard exposes:
-
-- all-user status and account creation, update, and deletion;
-- per-user network status, creation, update, deletion, and raw upstream quote;
-- per-user channel status, creation, update, and deletion;
-- upstream SASL PLAIN, certificate generation, and certificate fingerprints;
-- server status, broadcast notices, debug logging, and BouncerServ help.
-
-Use `↑`/`↓` and `Enter` to select a dashboard action, or the displayed shortcuts. Forms support `Tab`/`Enter` to advance, `Space` to cycle boolean/select fields, `Ctrl-S` to preview, and `Esc` to cancel. For a mutation, press `y` only after reviewing the redacted preview; `n` or `Esc` cancels it.
-
-The admin view requires a global login because a username such as `alice/libera` is already bound to one network. The logged-in account must be a soju administrator for all-user operations; soju itself enforces those permissions.
-
-Use TLS when the admin session crosses a host boundary. For a local plain listener, `-tls=false` is acceptable when the connection is confined to the VPS loopback interface.
-
-This follows soju's documented BouncerServ service model: the service accepts shell-style quoting, and the same operations are what `sojuctl` sends through the optional `unix+admin://` socket. The TUI does not require an admin socket or a local `sojuctl` binary. See the [soju service documentation](https://manpages.ubuntu.com/manpages/stonking/man1/soju.1.html) and [sojuctl manual](https://manpages.debian.org/unstable/soju/sojuctl.1.en.html).
-
-## soju setup
-
-The TUI manages the running soju instance through BouncerServ. Create the first administrator with soju's normal installation tooling, then use the admin dashboard. The same operation can be performed by selecting “Create network for user” and filling in the form; no command typing is required.
+On first run, the TUI uses `/etc/soju/config` and locates `sojuctl` in
+`PATH`. It saves those non-secret paths to:
 
 ```text
-/msg BouncerServ network create -addr ircs://irc.libera.chat -name libera
+~/.config/soju-tui/admin.json
 ```
 
-The IRC chat view still supports the normal `/network list` command. Networks discovered through the soju extension appear in the sidebar automatically. The child sessions use `BOUNCER BIND`, so one TUI process can show multiple upstream networks.
+The profile is created with mode `0600`. Future runs use the saved settings,
+so there is no server, port, or IRC login command to type.
 
-If a client name is supplied, soju can keep per-client history separately:
+Useful overrides:
 
 ```sh
-./dist/soju-tui-linux-amd64 -client vps-tui -username alice
+./dist/soju-tui-linux-amd64 -config /etc/soju/config
+./dist/soju-tui-linux-amd64 -sojuctl /usr/bin/sojuctl
+./dist/soju-tui-linux-amd64 -profile ~/.config/soju-tui/admin.json
+./dist/soju-tui-linux-amd64 -timeout 60s
+./dist/soju-tui-linux-amd64 -setup
 ```
 
-## Keys and commands
-
-`Enter` sends chat input. `Tab` or `Ctrl-N` selects the next buffer; `Ctrl-P` selects the previous one; `PageUp` and `PageDown` scroll; `F2` opens the admin UI; `Ctrl-C` or `Ctrl-Q` exits. Up/down recall the chat input history.
-
-Supported commands include:
+The soju daemon configuration should contain an admin listener, for example:
 
 ```text
-/join #channel [key]
-/part [#channel] [reason]
-/msg target text
-/query nick
-/notice target text
-/me action text
-/nick newnick
-/topic [text]
-/names [#channel]
-/away [reason]       /back
-/network [list|name]
-/raw IRC COMMAND ...
-/clear                /help       /quit
+listen unix+admin://
 ```
 
-The bouncer sends backlog automatically when the session attaches. If the soju instance exposes `draft/chathistory` and message IDs, `PageUp` requests older history for the active channel or query.
+The default admin socket is `/run/soju/admin`. The TUI does not use the IRC
+TLS listener such as `172.32.0.1:6697`; that listener is intentionally outside
+this application's scope.
 
-## Current scope
+## Controls
 
-The admin UI covers the documented running-instance BouncerServ operations. It does not edit `/etc/soju/config`, replace systemd, or change immutable process-level listeners/database/log directives; those are daemon deployment concerns and require the normal operating-system workflow. The chat UI does not yet implement file transfers, message editing/reactions, local logging, or automatic reconnect after a network outage.
+- `↑`/`↓` — select an administration action;
+- `Enter` — open an action or advance a form;
+- `Tab`/`Shift-Tab` — move between form fields;
+- `Space` — cycle booleans and select fields;
+- `Ctrl-S` — preview/submit a form;
+- `y` — approve a mutation on the confirmation screen;
+- `n` or `Esc` — cancel or go back;
+- `r` — repeat the last read-only refresh;
+- `Ctrl-C`/`Ctrl-Q` — exit.
 
-## Verify
+## Build
+
+The source requires Go 1.23 or newer. The helper runs tests and vet before
+building and writes binaries under `dist/`.
+
+For your x86_64 VPS:
 
 ```sh
+./scripts/build.sh --target linux-amd64 --version 0.2.0
+```
+
+To pull the latest fast-forwardable commit and build:
+
+```sh
+./scripts/build.sh --pull --target linux-amd64 --version 0.2.0
+```
+
+The helper prints each phase and defaults to `GOTOOLCHAIN=local`, so an old Go
+installation fails clearly instead of silently downloading another toolchain.
+Use `GOTOOLCHAIN=auto` explicitly if automatic toolchain downloads are wanted.
+
+Other targets:
+
+```sh
+./scripts/build.sh --target linux-arm64
+./scripts/build.sh --target all
+./scripts/build.sh --target host
+```
+
+The Linux binaries are statically linked with `CGO_ENABLED=0`; they do not
+require Go or ncurses at runtime. A normal terminal and its terminfo entry are
+sufficient.
+
+The Makefile provides equivalent targets:
+
+```sh
+make linux-amd64
+make linux-arm64
 make test
 make vet
 ```
+
+## Verification
+
+```sh
+go test ./...
+go test -race ./...
+go vet ./...
+sh -n scripts/build.sh
+```
+
+The TUI operates on the documented running-instance administration surface.
+It does not edit `/etc/soju/config`, manage systemd, change listeners, or
+modify soju's database files directly.
