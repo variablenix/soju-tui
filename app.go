@@ -18,6 +18,7 @@ const (
 type AdminField struct {
 	Label    string
 	Value    string
+	Original string
 	Secret   bool
 	Required bool
 	Kind     string
@@ -40,6 +41,10 @@ type AdminOperation struct {
 	Secrets               []string
 	Preview               string
 	NeedsSojuConfirmation bool
+	ConfirmPhrase         string
+	FollowUpKind          string
+	TargetUser            string
+	TargetNetwork         string
 }
 
 type AdminConfirmation struct {
@@ -150,12 +155,27 @@ func (a *App) processResult(result adminResult) {
 		}
 		a.setStatusLocked("sojuctl operation failed", 0)
 	} else {
+		if result.Operation.FollowUpKind == "network-update" {
+			network, err := findNetworkStatus(output, result.Operation.TargetNetwork)
+			if err != nil {
+				a.admin.Output = append(a.admin.Output, "ERROR: "+err.Error())
+				a.setStatusLocked("could not load network settings", 0)
+				a.admin.Output = trimOutput(a.admin.Output)
+				return
+			}
+			a.admin.Form = newNetworkUpdateForm(result.Operation.TargetUser, network)
+			a.admin.View = adminForm
+			a.setStatusLocked("existing public settings loaded; blank undisclosed fields keep their current values", 0)
+			a.admin.Output = trimOutput(a.admin.Output)
+			return
+		}
 		if result.Operation.NeedsSojuConfirmation {
 			if args, username, ok := parseUserDeleteConfirmation(output); ok {
 				followUp := makeAdminOperation(a.backend.Config, "Confirm deletion of user "+username, args, []string{"user", "status"}, true, nil)
+				followUp.ConfirmPhrase = "DELETE USER " + username
 				a.admin.Confirm = &AdminConfirmation{Operation: followUp}
 				a.admin.View = adminOutput
-				a.setStatusLocked("soju requires a second deletion confirmation; review it and press y", 0)
+				a.setStatusLocked("soju requires a second deletion confirmation; type the displayed phrase", 0)
 				a.admin.Output = trimOutput(a.admin.Output)
 				return
 			}
