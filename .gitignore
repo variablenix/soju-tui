@@ -1,0 +1,5 @@
+# Local and cross-compiled build artifacts.
+/soju-tui
+/soju-tui-linux-amd64
+/soju-tui-linux-arm64
+/dist/*
