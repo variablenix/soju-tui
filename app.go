@@ -27,10 +27,11 @@ type AdminField struct {
 }
 
 type AdminForm struct {
-	Kind   string
-	Title  string
-	Fields []AdminField
-	Cursor int
+	Kind       string
+	TargetKind string
+	Title      string
+	Fields     []AdminField
+	Cursor     int
 }
 
 type AdminOperation struct {
@@ -46,6 +47,7 @@ type AdminOperation struct {
 	FollowUpKind          string
 	TargetUser            string
 	TargetNetwork         string
+	TargetChannel         string
 	CapabilityUser        string
 	FormKind              string
 	Quiet                 bool
@@ -71,6 +73,8 @@ type AdminState struct {
 	LastRefresh      []string
 	LastOperation    *AdminOperation
 	PendingOperation *AdminOperation
+	PendingBatch     []AdminOperation
+	BatchFailures    int
 	Capabilities     AdminCapabilities
 	Users            []string
 }
@@ -244,6 +248,93 @@ func (a *App) processResult(result adminResult) {
 			a.setStatusLocked("could not open user-targeted action", 0)
 			a.admin.Output = trimOutput(a.admin.Output)
 			return
+		}
+		return
+	}
+	if result.Operation.FollowUpKind == "open-network-form" {
+		if result.Err != nil {
+			a.admin.Output = append(a.admin.Output, "ERROR: could not discover saved networks: "+redactText(result.Err.Error(), result.Operation.Secrets))
+			a.admin.View = adminOutput
+			a.setStatusLocked("network discovery failed", 0)
+			a.admin.Output = trimOutput(a.admin.Output)
+			return
+		}
+		if err := a.adminOpenNetworkFormLocked(result.Operation.FormKind, result.Operation.TargetUser, output); err != nil {
+			a.admin.Output = append(a.admin.Output, "ERROR: "+err.Error())
+			a.admin.View = adminOutput
+			a.setStatusLocked("could not open network-targeted action", 0)
+			a.admin.Output = trimOutput(a.admin.Output)
+		}
+		return
+	}
+	if result.Operation.FollowUpKind == "open-channel-form" {
+		if result.Err != nil {
+			a.admin.Output = append(a.admin.Output, "ERROR: could not discover saved channels: "+redactText(result.Err.Error(), result.Operation.Secrets))
+			a.admin.View = adminOutput
+			a.setStatusLocked("channel discovery failed", 0)
+			a.admin.Output = trimOutput(a.admin.Output)
+			return
+		}
+		if err := a.adminOpenChannelFormLocked(result.Operation.FormKind, result.Operation.TargetUser, result.Operation.TargetNetwork, output); err != nil {
+			a.admin.Output = append(a.admin.Output, "ERROR: "+err.Error())
+			a.admin.View = adminOutput
+			a.setStatusLocked("could not open channel-targeted action", 0)
+			a.admin.Output = trimOutput(a.admin.Output)
+		}
+		return
+	}
+	if result.Operation.FollowUpKind == "channel-update" {
+		if result.Err != nil {
+			a.admin.Output = append(a.admin.Output, "ERROR: could not load channel state: "+redactText(result.Err.Error(), result.Operation.Secrets))
+			a.setStatusLocked("channel state lookup failed", 0)
+			a.admin.Output = trimOutput(a.admin.Output)
+			return
+		}
+		channel, err := findChannelStatus(output, result.Operation.TargetChannel)
+		if err != nil {
+			a.admin.Output = append(a.admin.Output, "ERROR: "+err.Error())
+			a.setStatusLocked("could not load channel settings", 0)
+			a.admin.Output = trimOutput(a.admin.Output)
+			return
+		}
+		a.admin.Form = newChannelUpdateForm(result.Operation.TargetUser, result.Operation.TargetNetwork, channel)
+		a.admin.View = adminForm
+		a.setStatusLocked("current detached state loaded; blank undisclosed settings keep their values", 0)
+		return
+	}
+	if result.Operation.FollowUpKind == "cert-fingerprint-batch" {
+		a.admin.Output = append(a.admin.Output, "CERTFP NETWORK: "+result.Operation.TargetNetwork)
+		switch {
+		case result.Err == nil:
+			if strings.TrimSpace(output) == "" {
+				a.admin.Output = append(a.admin.Output, "  No fingerprint data returned")
+			} else {
+				a.admin.Output = append(a.admin.Output, strings.TrimSpace(output))
+			}
+		case isCertFPNotConfigured(output):
+			a.admin.Output = append(a.admin.Output, "  Not configured")
+		default:
+			a.admin.BatchFailures++
+			a.admin.Output = append(a.admin.Output, "ERROR: "+redactText(result.Err.Error(), result.Operation.Secrets))
+			if strings.TrimSpace(output) != "" {
+				a.admin.Output = append(a.admin.Output, strings.TrimSpace(output))
+			}
+		}
+		a.admin.Output = append(a.admin.Output, "────────────────────────────────")
+		a.admin.Output = trimOutput(a.admin.Output)
+		if len(a.admin.PendingBatch) > 0 {
+			next := a.admin.PendingBatch[0]
+			a.admin.PendingBatch = a.admin.PendingBatch[1:]
+			a.mu.Unlock()
+			a.requestOperation(next)
+			a.mu.Lock()
+			a.setStatusLocked("inspecting upstream CertFP across saved networks...", 0)
+			return
+		}
+		if a.admin.BatchFailures > 0 {
+			a.setStatusLocked("CertFP inspection completed with errors", 0)
+		} else {
+			a.setStatusLocked("CertFP inspection completed for all saved networks", 4*time.Second)
 		}
 		return
 	}

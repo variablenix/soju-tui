@@ -216,6 +216,40 @@ func TestAdminChannelUpdateRejectsNoChanges(t *testing.T) {
 	}
 }
 
+func TestLoadedChannelUpdateSubmitsOnlyChangedDetachedState(t *testing.T) {
+	form := newChannelUpdateForm("alice", "libera", ChannelStatus{Name: "#chat", Detached: true})
+	if _, err := buildAdminOperation("/etc/soju/config", form); err == nil || !strings.Contains(err.Error(), "no channel settings changed") {
+		t.Fatalf("expected no-change rejection, got %v", err)
+	}
+	form.Fields[3].Value = "false"
+	op, err := buildAdminOperation("/etc/soju/config", form)
+	if err != nil {
+		t.Fatal(err)
+	}
+	joined := strings.Join(op.Args, "\x00")
+	if !strings.Contains(joined, "channel\x00update\x00#chat/libera\x00-detached\x00false") {
+		t.Fatalf("unexpected channel update args: %#v", op.Args)
+	}
+	if strings.Contains(joined, "-relay-detached") || strings.Contains(joined, "-reattach-on") || strings.Contains(joined, "-detach-after") || strings.Contains(joined, "-detach-on") {
+		t.Fatalf("undisclosed settings were submitted: %#v", op.Args)
+	}
+}
+
+func TestCertFingerprintBatchCoversEveryDiscoveredNetwork(t *testing.T) {
+	ops := certFingerprintBatchOperations("/etc/soju/config", "alice", []string{allNetworksSelection, "libera", "ouch"})
+	if len(ops) != 2 {
+		t.Fatalf("operations = %#v", ops)
+	}
+	for index, want := range []string{"libera", "ouch"} {
+		if ops[index].TargetNetwork != want || !ops[index].Quiet || ops[index].FollowUpKind != "cert-fingerprint-batch" {
+			t.Fatalf("operation %d = %#v", index, ops[index])
+		}
+		if got := strings.Join(ops[index].Args, " "); got != "user run alice certfp fingerprint -network "+want {
+			t.Fatalf("operation %d args = %q", index, got)
+		}
+	}
+}
+
 func TestParseUserDeleteConfirmation(t *testing.T) {
 	args, username, ok := parseUserDeleteConfirmation(`To confirm user deletion, send "user delete alice 0123ab"`)
 	if !ok || username != "alice" || len(args) != 4 || args[2] != "alice" || args[3] != "0123ab" {
@@ -511,6 +545,14 @@ func TestChannelStatusCanListAllNetworks(t *testing.T) {
 	}
 	if containsArg(op.Args, "-network") {
 		t.Fatalf("blank network unexpectedly added a filter: %#v", op.Args)
+	}
+	form.Fields[1].Value = allNetworksSelection
+	op, err = buildAdminOperation("/etc/soju/config", form)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if containsArg(op.Args, "-network") {
+		t.Fatalf("All networks unexpectedly added a literal filter: %#v", op.Args)
 	}
 }
 
