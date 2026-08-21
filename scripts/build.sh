@@ -9,6 +9,7 @@ VERSION=${VERSION:-dev}
 PULL=0
 GO_BIN=${GO_BIN:-go}
 GO_TOOLCHAIN=${GOTOOLCHAIN:-local}
+REVISION=${REVISION:-}
 
 log() {
 	printf '[soju-tui] %s\n' "$1"
@@ -67,8 +68,27 @@ fi
 
 command -v "$GO_BIN" >/dev/null 2>&1 || { echo "Go is required to build soju-tui" >&2; exit 1; }
 
+case "$VERSION" in
+*[!A-Za-z0-9._+-]*) echo "version contains unsupported characters" >&2; exit 2 ;;
+esac
+if [ -z "$REVISION" ]; then
+	if command -v git >/dev/null 2>&1 && git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+		REVISION=$(git rev-parse --short=12 HEAD)
+		if ! git diff --quiet -- '*.go' go.mod go.sum 'scripts/*.sh' ||
+			! git diff --cached --quiet -- '*.go' go.mod go.sum 'scripts/*.sh'; then
+			REVISION=$REVISION-dirty
+		fi
+	else
+		REVISION=unknown
+	fi
+fi
+case "$REVISION" in
+*[!A-Za-z0-9._+-]*) echo "revision contains unsupported characters" >&2; exit 2 ;;
+esac
+
 log "toolchain policy: GOTOOLCHAIN=$GO_TOOLCHAIN"
 log "using $(go_cmd version)"
+log "build revision: $REVISION"
 
 log "checking shell helpers"
 sh -n scripts/build.sh
@@ -89,7 +109,7 @@ log "running go vet"
 go_cmd vet ./...
 
 mkdir -p dist
-LDFLAGS="-s -w -X main.version=$VERSION"
+LDFLAGS="-s -w -X main.version=$VERSION -X main.revision=$REVISION"
 
 build_target() {
 	target=$1

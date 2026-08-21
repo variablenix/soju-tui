@@ -50,8 +50,9 @@ and your command search path:
 
 ```sh
 ls -l /usr/local/bin/soju-tui
-command -v soju-tui
+type -a soju-tui
 /usr/local/bin/soju-tui -version
+dist/soju-tui-linux-amd64 -version
 ```
 
 If it is missing or stale, return to the repository and safely preview and
@@ -61,6 +62,22 @@ rerun setup:
 ./scripts/setup.sh --dry-run
 ./scripts/setup.sh
 ```
+
+The apply run asks for replacement immediately before the atomic copy. A
+successful run prints the selected build revision and matching source and
+installed fingerprints. Verify the files directly if needed:
+
+```sh
+cmp -s dist/soju-tui-linux-amd64 /usr/local/bin/soju-tui \
+  && echo "installed binary matches the repository artifact"
+cksum dist/soju-tui-linux-amd64 /usr/local/bin/soju-tui
+```
+
+Use `dist/soju-tui-linux-arm64` instead on an ARM64 host.
+
+If `cmp` succeeds but typing `soju-tui` behaves differently, `type -a soju-tui`
+will reveal an alias, shell function, or earlier executable in `PATH`. Start a
+fresh shell or run `hash -r` after correcting that command-resolution issue.
 
 If `/usr/local/bin` is not in the login shell's `PATH`, run the absolute path or
 choose a trusted directory already in `PATH` with `--install-path`.

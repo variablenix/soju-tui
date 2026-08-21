@@ -46,8 +46,10 @@ world-writable.
 The installed command is a root-owned copy rather than a symlink into the Git
 checkout, so moving or deleting the checkout does not break it. Installation is
 atomic. The wizard skips the copy when its content and security metadata are
-already current, prompts before replacing an existing regular file, and
-refuses symbolic-link, non-file, or insecure install destinations.
+already current, prompts immediately before replacing an existing regular
+file, and refuses symbolic-link, non-file, or insecure install destinations.
+It prints the selected build revision and verifies that the installed content
+fingerprint exactly matches the architecture-specific source artifact.
 
 ### Setup choices
 
