@@ -171,9 +171,23 @@ esac
 [ ! -L "$TUI_BINARY" ] || fail "refusing a symbolic-link source binary"
 [ -x "$TUI_BINARY" ] || fail "$TUI_BINARY is not executable"
 command -v runuser >/dev/null 2>&1 || fail "runuser is required"
-if ! runuser -u "$TARGET_USER" -- "$TUI_BINARY" -version >/dev/null 2>&1; then
+command -v cksum >/dev/null 2>&1 || fail "cksum is required"
+binary_fingerprint() {
+	FINGERPRINT_PATH=$1
+	FINGERPRINT=$(cksum <"$FINGERPRINT_PATH") || fail "cannot fingerprint $FINGERPRINT_PATH"
+	FINGERPRINT_CRC=${FINGERPRINT%% *}
+	FINGERPRINT_BYTES=${FINGERPRINT#* }
+	case "$FINGERPRINT_CRC:$FINGERPRINT_BYTES" in
+	*[!0-9:]*) fail "unexpected checksum output for $FINGERPRINT_PATH" ;;
+	esac
+	[ -n "$FINGERPRINT_CRC" ] && [ -n "$FINGERPRINT_BYTES" ] || fail "empty checksum output for $FINGERPRINT_PATH"
+	printf '%s:%s' "$FINGERPRINT_CRC" "$FINGERPRINT_BYTES"
+}
+if ! SOURCE_VERSION=$(runuser -u "$TARGET_USER" -- "$TUI_BINARY" -version 2>/dev/null); then
 	fail "$TUI_BINARY cannot run as $TARGET_USER; verify its architecture and permissions"
 fi
+[ -n "$SOURCE_VERSION" ] || fail "$TUI_BINARY returned an empty version"
+SOURCE_FINGERPRINT=$(binary_fingerprint "$TUI_BINARY")
 
 INSTALL_STATUS=disabled
 if [ "$INSTALL_BINARY" -eq 1 ]; then
@@ -229,45 +243,49 @@ printf '  Soju config:         %s\n' "$CONFIG_PATH"
 printf '  Admin socket:        %s\n' "$SOCKET_PATH"
 printf '  sojuctl:             %s\n' "$SOJUCTL_PATH"
 printf '  TUI binary:          %s\n' "$TUI_BINARY"
+printf '  TUI build:           %s\n' "$SOURCE_VERSION"
+printf '  TUI fingerprint:     %s\n' "$SOURCE_FINGERPRINT"
 if [ "$INSTALL_BINARY" -eq 1 ]; then
 	printf '  Installed command:   %s (%s)\n\n' "$INSTALL_PATH" "$INSTALL_STATUS"
 else
 	printf '  Installed command:   disabled (--no-install)\n\n'
 fi
 
-if { [ "$INSTALL_STATUS" = 'will update' ] || [ "$INSTALL_STATUS" = 'will repair ownership or mode' ]; } &&
-	[ "$DRY_RUN" -ne 1 ] && [ "$ASSUME_YES" -ne 1 ]; then
-	printf 'Replace the existing regular file at %s? [y/N] ' "$INSTALL_PATH"
-	IFS= read -r ANSWER
-	case "$ANSWER" in
-	y | Y | yes | YES) ;;
-	*) fail "cancelled before replacing $INSTALL_PATH" ;;
-	esac
-fi
-
 install_tui_binary() {
 	[ "$INSTALL_BINARY" -eq 1 ] || return
 	if installed_binary_is_current; then
 		printf 'Installed command is already current: %s\n' "$INSTALL_PATH"
-		return
-	fi
-	if [ -e "$INSTALL_DIR" ]; then
-		validate_install_directory
 	else
-		install -d -m 0755 "$INSTALL_DIR"
-		validate_install_directory
+		if { [ "$INSTALL_STATUS" = 'will update' ] || [ "$INSTALL_STATUS" = 'will repair ownership or mode' ]; } &&
+			[ "$ASSUME_YES" -ne 1 ]; then
+			printf 'Replace the existing regular file at %s now? [y/N] ' "$INSTALL_PATH"
+			IFS= read -r ANSWER
+			case "$ANSWER" in
+			y | Y | yes | YES) ;;
+			*) fail "cancelled before replacing $INSTALL_PATH" ;;
+			esac
+		fi
+		if [ -e "$INSTALL_DIR" ]; then
+			validate_install_directory
+		else
+			install -d -m 0755 "$INSTALL_DIR"
+			validate_install_directory
+		fi
+		TEMP_BINARY=$(mktemp "$INSTALL_DIR/.soju-tui.install.XXXXXX") || fail "cannot create a temporary install file in $INSTALL_DIR"
+		trap 'rm -f "$TEMP_BINARY"' EXIT HUP INT TERM
+		install -m 0755 "$TUI_BINARY" "$TEMP_BINARY"
+		chown 0:0 "$TEMP_BINARY"
+		chmod 0755 "$TEMP_BINARY"
+		mv -f "$TEMP_BINARY" "$INSTALL_PATH"
+		TEMP_BINARY=
+		trap - EXIT HUP INT TERM
+		[ -x "$INSTALL_PATH" ] || fail "installed command is not executable: $INSTALL_PATH"
+		installed_binary_is_current || fail "installed command failed content, ownership, mode, or link-count verification"
+		printf 'Installed command: %s\n' "$INSTALL_PATH"
 	fi
-	TEMP_BINARY=$(mktemp "$INSTALL_DIR/.soju-tui.install.XXXXXX") || fail "cannot create a temporary install file in $INSTALL_DIR"
-	trap 'rm -f "$TEMP_BINARY"' EXIT HUP INT TERM
-	install -m 0755 "$TUI_BINARY" "$TEMP_BINARY"
-	chown 0:0 "$TEMP_BINARY"
-	chmod 0755 "$TEMP_BINARY"
-	mv -f "$TEMP_BINARY" "$INSTALL_PATH"
-	TEMP_BINARY=
-	trap - EXIT HUP INT TERM
-	[ -x "$INSTALL_PATH" ] || fail "installed command is not executable: $INSTALL_PATH"
-	installed_binary_is_current || fail "installed command failed content, ownership, mode, or link-count verification"
-	printf 'Installed command: %s\n' "$INSTALL_PATH"
+	INSTALLED_FINGERPRINT=$(binary_fingerprint "$INSTALL_PATH")
+	[ "$INSTALLED_FINGERPRINT" = "$SOURCE_FINGERPRINT" ] || fail "installed command fingerprint does not match the selected source binary"
+	printf 'Verified installed fingerprint: %s\n' "$INSTALLED_FINGERPRINT"
 }
 
 install_acl_package() {
@@ -332,7 +350,9 @@ runuser -u "$TARGET_USER" -- "$SOJUCTL_PATH" -config "$CONFIG_PATH" server statu
 
 if [ "$INSTALL_BINARY" -eq 1 ]; then
 	printf '\nVerifying installed command as local user %s...\n' "$TARGET_USER"
-	runuser -u "$TARGET_USER" -- "$INSTALL_PATH" -version
+	INSTALLED_VERSION=$(runuser -u "$TARGET_USER" -- "$INSTALL_PATH" -version)
+	[ "$INSTALLED_VERSION" = "$SOURCE_VERSION" ] || fail "installed command reports a different build than $TUI_BINARY"
+	printf '%s\n' "$INSTALLED_VERSION"
 	if [ "$INSTALL_PATH" = /usr/local/bin/soju-tui ]; then
 		printf '\nSetup complete. Run as %s:\n  soju-tui\n' "$TARGET_USER"
 	else
