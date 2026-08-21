@@ -69,12 +69,13 @@ rerun setup:
 
 The apply run asks for replacement immediately before the atomic copy. A
 successful run prints the selected build revision and matching source and
-installed fingerprints. Verify the files directly if needed:
+installed SHA-256 values. Verify the files directly if needed:
 
 ```sh
 cmp -s dist/soju-tui-linux-amd64 /usr/local/bin/soju-tui \
   && echo "installed binary matches the repository artifact"
-cksum dist/soju-tui-linux-amd64 /usr/local/bin/soju-tui
+sha256sum dist/soju-tui-linux-amd64 /usr/local/bin/soju-tui
+(cd dist && sha256sum -c SHA256SUMS)
 ```
 
 Use `dist/soju-tui-linux-arm64` instead on an ARM64 host.
@@ -110,6 +111,17 @@ The footer identifies the current direction while scrolled. The menu's
 **View Soju host TLS certificate** reads the public certificate path from the
 active config's `tls` line. Confirm the path exists and is readable by the TUI
 user. The private key does not need to be readable.
+
+Use absolute certificate and key paths in the `tls` directive. Relative paths
+depend on Soju's service working directory, which can differ from the TUI's
+directory. The viewer refuses such an ambiguous path instead of risking display
+of an unrelated certificate.
+
+## Setup rejects a development build
+
+Production setup rejects a build reporting `dev`, `dirty`, or `unknown`. Build
+from a clean exact release tag as described in [Building and releases](building.md).
+For disposable testing only, rerun setup with `--allow-development-build`.
 
 ## Git pull reports local changes
 

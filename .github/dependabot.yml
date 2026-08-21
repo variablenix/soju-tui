@@ -1,0 +1,32 @@
+version: 2
+
+updates:
+  - package-ecosystem: gomod
+    directory: "/"
+    schedule:
+      interval: weekly
+      day: monday
+      time: "03:47"
+      timezone: America/Los_Angeles
+    open-pull-requests-limit: 5
+    labels:
+      - dependencies
+    groups:
+      go-modules:
+        patterns:
+          - "*"
+
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: weekly
+      day: monday
+      time: "04:17"
+      timezone: America/Los_Angeles
+    open-pull-requests-limit: 5
+    labels:
+      - dependencies
+    groups:
+      github-actions:
+        patterns:
+          - "*"

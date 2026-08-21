@@ -1,12 +1,9 @@
-APP := soju-tui
 VERSION ?= dev
-LDFLAGS := -s -w -X main.version=$(VERSION)
 
-.PHONY: build test vet clean linux-amd64 linux-arm64
+.PHONY: build test vet clean linux-amd64 linux-arm64 release
 
 build:
-	mkdir -p dist
-	go build -buildvcs=false -trimpath -ldflags "$(LDFLAGS)" -o dist/$(APP) .
+	./scripts/build.sh --target host --version "$(VERSION)"
 
 test:
 	go test ./...
@@ -15,12 +12,13 @@ vet:
 	go vet ./...
 
 linux-amd64:
-	mkdir -p dist
-	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -buildvcs=false -trimpath -ldflags "$(LDFLAGS)" -o dist/$(APP)-linux-amd64 .
+	./scripts/build.sh --target linux-amd64 --version "$(VERSION)"
 
 linux-arm64:
-	mkdir -p dist
-	CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -buildvcs=false -trimpath -ldflags "$(LDFLAGS)" -o dist/$(APP)-linux-arm64 .
+	./scripts/build.sh --target linux-arm64 --version "$(VERSION)"
+
+release:
+	./scripts/build.sh --target all --version "$(VERSION)" --release
 
 clean:
-	rm -f $(APP) $(APP)-linux-amd64 $(APP)-linux-arm64 dist/$(APP) dist/$(APP)-linux-amd64 dist/$(APP)-linux-arm64
+	rm -f soju-tui soju-tui-linux-amd64 soju-tui-linux-arm64 dist/soju-tui dist/soju-tui-linux-amd64 dist/soju-tui-linux-arm64 dist/SHA256SUMS dist/BUILDINFO

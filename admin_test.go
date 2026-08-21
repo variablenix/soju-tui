@@ -51,6 +51,9 @@ func TestPrivilegeAndBroadcastChangesRequireTypedConfirmation(t *testing.T) {
 	if op.ConfirmPhrase != "CREATE ADMIN USER" {
 		t.Fatalf("admin creation confirmation = %q", op.ConfirmPhrase)
 	}
+	if !containsArg(op.Args, "-admin=true") || containsArg(op.Args, "-admin") {
+		t.Fatalf("standard Go boolean flag was not encoded safely: %#v", op.Args)
+	}
 
 	notice, err := newAdminForm("server-notice")
 	if err != nil {
@@ -251,9 +254,56 @@ func TestCertFingerprintBatchCoversEveryDiscoveredNetwork(t *testing.T) {
 }
 
 func TestParseUserDeleteConfirmation(t *testing.T) {
-	args, username, ok := parseUserDeleteConfirmation(`To confirm user deletion, send "user delete alice 0123ab"`)
+	args, username, ok := parseUserDeleteConfirmation(`To confirm user deletion, send "user delete alice 0123ab"`, "alice")
 	if !ok || username != "alice" || len(args) != 4 || args[2] != "alice" || args[3] != "0123ab" {
 		t.Fatalf("unexpected delete confirmation parse: args=%#v username=%q ok=%v", args, username, ok)
+	}
+}
+
+func TestParseUserDeleteConfirmationSupportsSpacesAndRejectsMismatch(t *testing.T) {
+	args, username, ok := parseUserDeleteConfirmation(`To confirm user deletion, send "user delete team lead:ops abc123"`, "team lead:ops")
+	if !ok || username != "team lead:ops" || strings.Join(args, "|") != "user|delete|team lead:ops|abc123" {
+		t.Fatalf("unexpected delete confirmation parse: args=%#v username=%q ok=%v", args, username, ok)
+	}
+	if _, _, ok := parseUserDeleteConfirmation(`To confirm user deletion, send "user delete mallory abc123"`, "alice"); ok {
+		t.Fatal("accepted a confirmation for a different username")
+	}
+}
+
+func TestUnixSchemeCompatibilityFallback(t *testing.T) {
+	args := []string{"user", "run", "alice", "network", "create", "-addr", "unix:///run/irc.sock", "-name", "local"}
+	fallback := unixSchemeFallbackArgs(args)
+	if got := strings.Join(fallback, " "); got != "user run alice network create -addr irc+unix:///run/irc.sock -name local" {
+		t.Fatalf("fallback = %q", got)
+	}
+	if !isUnixSchemeCompatibilityError(`unknown scheme "unix" (supported schemes: ircs, irc+insecure, irc+unix)`) {
+		t.Fatal("did not recognize the explicit forward-compatibility error")
+	}
+	if isUnixSchemeCompatibilityError(`dial unix /run/irc.sock: permission denied`) {
+		t.Fatal("treated an unrelated Unix socket error as a compatibility signal")
+	}
+}
+
+func TestCreateUserRejectsAmbiguousDiscoveryNames(t *testing.T) {
+	for _, username := range []string{" alice", "alice ", "alice (admin)", "alice (disabled)"} {
+		form, err := newAdminForm("user-create")
+		if err != nil {
+			t.Fatal(err)
+		}
+		form.Fields[0].Value = username
+		form.Fields[1].Value = "password"
+		if _, err := buildAdminOperation("/etc/soju/config", form); err == nil {
+			t.Fatalf("ambiguous username %q was accepted", username)
+		}
+	}
+	form, err := newAdminForm("user-create")
+	if err != nil {
+		t.Fatal(err)
+	}
+	form.Fields[0].Value = "team lead:ops"
+	form.Fields[1].Value = "password"
+	if _, err := buildAdminOperation("/etc/soju/config", form); err != nil {
+		t.Fatalf("discoverable username with spaces and colon was rejected: %v", err)
 	}
 }
 

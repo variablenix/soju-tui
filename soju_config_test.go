@@ -82,3 +82,15 @@ func TestServerTLSCertificateReportReadsCertificateOnly(t *testing.T) {
 		t.Fatalf("unexpected report: %s", report)
 	}
 }
+
+func TestServerTLSCertificateReportRejectsAmbiguousRelativePath(t *testing.T) {
+	dir := t.TempDir()
+	configPath := filepath.Join(dir, "soju.conf")
+	if err := os.WriteFile(configPath, []byte("tls cert.pem key.pem\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	_, err := serverTLSCertificateReport(configPath, time.Now())
+	if err == nil || !strings.Contains(err.Error(), "depends on Soju's process working directory") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
