@@ -28,7 +28,8 @@ one reviewed user. Server notices are already server-wide.
 The menu covers the administration commands reported by the running server:
 
 - server status, notices, debug logging, and BouncerServ help;
-- user listing, creation, updates, and deletion;
+- all-user and specific-user status, account updates, IRC identity updates, and
+  deletion;
 - per-user networks and channels;
 - upstream SASL PLAIN and EXTERNAL/CertFP configuration;
 - downstream client device certificates when supported by Soju;
@@ -47,6 +48,19 @@ values are submitted.
 Soju does not return saved upstream passwords, nicknames, usernames, real
 names, CertFP values, or connect commands in network status. Those fields remain
 blank to preserve the existing value, and saved passwords are never displayed.
+
+The network form labels `-certfp` as **Server TLS fingerprint** because it pins
+the upstream IRC server certificate; it is not SASL CertFP. It accepts SHA-256
+or SHA-512. Up to 20 connect commands can be supplied using the simple first
+field plus the JSON array for additional commands. Updating that list replaces
+it. Because Soju does not disclose several saved values, **Explicitly clear**
+can remove one password, server pin, identity value, or connect-command list per
+reviewed operation. Clearing uses an exact confirmation phrase. Connect and raw
+network commands are treated as potentially secret and redacted from the
+confirmation preview.
+
+Channel status can be filtered to one network or left blank to list channels
+across all networks for the selected user.
 
 ## Certificate types
 

@@ -31,6 +31,7 @@ func loadAdminProfile(path string) (AdminProfile, error) {
 	if path == "" {
 		return AdminProfile{}, nil
 	}
+	// #nosec G304,G703 -- this is the operator-selected per-user profile path.
 	data, err := os.ReadFile(path)
 	if errors.Is(err, os.ErrNotExist) {
 		return AdminProfile{}, nil
@@ -50,6 +51,8 @@ func saveAdminProfile(path string, profile AdminProfile) error {
 		return nil
 	}
 	dir := filepath.Dir(path)
+	// #nosec G703 -- the directory belongs to the unprivileged account that
+	// explicitly selected the profile path; the profile itself remains 0600.
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return err
 	}
@@ -79,10 +82,12 @@ func saveAdminProfile(path string, profile AdminProfile) error {
 	if err := temporary.Close(); err != nil {
 		return err
 	}
+	// #nosec G703 -- atomic replacement targets the operator-selected profile;
+	// the temporary inode is already mode 0600 and rename preserves that mode.
 	if err := os.Rename(temporaryName, path); err != nil {
 		return err
 	}
-	return os.Chmod(path, 0o600)
+	return nil
 }
 
 func resolveSojuCtl(explicit, saved string) (string, error) {

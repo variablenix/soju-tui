@@ -40,6 +40,8 @@ func (s *SojuCtl) Run(parent context.Context, args []string) (string, error) {
 		argv = append(argv, "-config", s.Config)
 	}
 	argv = append(argv, args...)
+	// #nosec G204 -- the executable is resolved from an explicit local setting,
+	// arguments are passed as an argv vector, and no command shell is invoked.
 	command := exec.CommandContext(ctx, s.Path, argv...)
 	output, err := command.CombinedOutput()
 	text := string(output)
