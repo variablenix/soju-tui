@@ -89,13 +89,13 @@ build_target() {
 	log "building $target version $VERSION"
 	case "$target" in
 		host)
-		go_cmd build -trimpath -ldflags "$LDFLAGS" -o "dist/soju-tui" .
+		go_cmd build -buildvcs=false -trimpath -ldflags "$LDFLAGS" -o "dist/soju-tui" .
 		;;
 		linux-amd64)
-		CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go_cmd build -trimpath -ldflags "$LDFLAGS" -o "dist/soju-tui-linux-amd64" .
+		CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go_cmd build -buildvcs=false -trimpath -ldflags "$LDFLAGS" -o "dist/soju-tui-linux-amd64" .
 		;;
 		linux-arm64)
-		CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go_cmd build -trimpath -ldflags "$LDFLAGS" -o "dist/soju-tui-linux-arm64" .
+		CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go_cmd build -buildvcs=false -trimpath -ldflags "$LDFLAGS" -o "dist/soju-tui-linux-arm64" .
 		;;
 		*)
 			echo "unknown target: $target" >&2

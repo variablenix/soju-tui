@@ -11,6 +11,7 @@ import (
 )
 
 var adminSocketPermissionPattern = regexp.MustCompile(`(?m)dial unix ([^\r\n]+): connect: permission denied`)
+var clientCertificateDisabledPattern = regexp.MustCompile(`(?i)client (certificate|certification) authentication.*disabled`)
 
 type SojuCtl struct {
 	Path    string
@@ -71,18 +72,26 @@ func quoteDisplayArg(value string) string {
 
 func sojuCtlFailureHint(output string) string {
 	match := adminSocketPermissionPattern.FindStringSubmatch(output)
-	if len(match) != 2 {
-		return ""
+	if len(match) == 2 {
+		socketPath := strings.TrimSpace(match[1])
+		if socketPath == "" {
+			return ""
+		}
+		return strings.Join([]string{
+			"ADMIN SOCKET ACCESS DENIED",
+			"The current Linux account cannot write " + socketPath + ".",
+			"Run the first-time setup wizard from the repository, then retry:",
+			"  ./scripts/setup.sh",
+			"Do not make the admin socket world-writable.",
+		}, "\n")
 	}
-	socketPath := strings.TrimSpace(match[1])
-	if socketPath == "" {
-		return ""
+	if clientCertificateDisabledPattern.MatchString(output) {
+		return strings.Join([]string{
+			"CLIENT DEVICE CERTIFICATES ARE DISABLED",
+			"These authenticate downstream IRC clients; they are not the Soju server's TLS certificate.",
+			"Enable client-cert-auth true in the Soju config and restart Soju before registering devices.",
+			"Use Server TLS certificate in the TUI to inspect the certificate presented by this host.",
+		}, "\n")
 	}
-	return strings.Join([]string{
-		"ADMIN SOCKET ACCESS DENIED",
-		"The current Linux account cannot write " + socketPath + ".",
-		"Run the first-time setup wizard from the repository, then retry:",
-		"  ./scripts/setup.sh",
-		"Do not make the admin socket world-writable.",
-	}, "\n")
+	return ""
 }

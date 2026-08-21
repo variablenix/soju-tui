@@ -17,6 +17,7 @@ var safeDisplayArg = regexp.MustCompile(`^[A-Za-z0-9_@+.,:/=-]+$`)
 func adminMenuItems() []AdminMenuItem {
 	return []AdminMenuItem{
 		{Label: "Server status", Kind: "server-status"},
+		{Label: "Server TLS certificate", Kind: "server-tls-certificate"},
 		{Label: "List users", Kind: "user-status"},
 		{Label: "Create user", Kind: "user-create"},
 		{Label: "Update user", Kind: "user-update"},
@@ -30,14 +31,14 @@ func adminMenuItems() []AdminMenuItem {
 		{Label: "Create channel for user", Kind: "channel-create"},
 		{Label: "Update channel for user", Kind: "channel-update"},
 		{Label: "Delete channel for user", Kind: "channel-delete"},
-		{Label: "Generate network certificate", Kind: "cert-generate"},
-		{Label: "Show certificate fingerprints", Kind: "cert-fingerprint"},
+		{Label: "Generate upstream SASL certificate", Kind: "cert-generate"},
+		{Label: "Show upstream CertFP fingerprints", Kind: "cert-fingerprint"},
 		{Label: "Show SASL status", Kind: "sasl-status"},
 		{Label: "Set SASL PLAIN", Kind: "sasl-set-plain"},
 		{Label: "Reset SASL", Kind: "sasl-reset"},
-		{Label: "Device certificates for user", Kind: "device-cert-status"},
-		{Label: "Create device certificate", Kind: "device-cert-create"},
-		{Label: "Delete device certificate", Kind: "device-cert-delete"},
+		{Label: "Client device certificates", Kind: "device-cert-status"},
+		{Label: "Register client device certificate", Kind: "device-cert-create"},
+		{Label: "Delete client device certificate", Kind: "device-cert-delete"},
 		{Label: "Broadcast server notice", Kind: "server-notice"},
 		{Label: "Toggle server debug", Kind: "server-debug"},
 		{Label: "BouncerServ help", Kind: "help"},
@@ -71,6 +72,33 @@ func (a *App) adminHandleKey(key string, r rune) {
 		return
 	}
 	if a.admin.Confirm != nil {
+		confirmation := a.admin.Confirm
+		if confirmation.Operation.ConfirmPhrase != "" {
+			switch key {
+			case "esc":
+				a.admin.Confirm = nil
+				a.setStatusLocked("operation cancelled", 3e9)
+			case "backspace":
+				if len(confirmation.Input) > 0 {
+					confirmation.Input = confirmation.Input[:len(confirmation.Input)-1]
+				}
+			case "enter":
+				if string(confirmation.Input) != confirmation.Operation.ConfirmPhrase {
+					a.setStatusLocked("confirmation phrase does not match", 4e9)
+					return
+				}
+				op := confirmation.Operation
+				a.admin.Confirm = nil
+				a.mu.Unlock()
+				a.requestOperation(op)
+				a.mu.Lock()
+			default:
+				if r != 0 && r >= 0x20 && r != 0x7f {
+					confirmation.Input = append(confirmation.Input, r)
+				}
+			}
+			return
+		}
 		switch {
 		case key == "esc", r == 'n' || r == 'N':
 			a.admin.Confirm = nil
@@ -116,6 +144,8 @@ func (a *App) adminActivateMenuLocked(cursor int) {
 	switch item.Kind {
 	case "server-status":
 		a.adminRequestReadOnlyLocked("Server status", []string{"server", "status"})
+	case "server-tls-certificate":
+		a.adminShowServerTLSLocked()
 	case "user-status":
 		a.adminRequestReadOnlyLocked("List users", []string{"user", "status"})
 	case "help":
@@ -222,14 +252,14 @@ func newAdminForm(kind string) (*AdminForm, error) {
 		}}, nil
 	case "user-delete":
 		return &AdminForm{Kind: kind, Title: "Delete soju user", Fields: []AdminField{field("Username", "", true, false, "text", "account to delete")}}, nil
-	case "network-create", "network-update":
-		if kind == "network-create" {
-			fields := append([]AdminField{baseNetwork[0]}, baseNetwork[2:]...)
-			return &AdminForm{Kind: kind, Title: "Create network for user", Fields: fields}, nil
-		}
-		fields := append([]AdminField(nil), baseNetwork...)
-		fields[2].Required = false
-		return &AdminForm{Kind: kind, Title: "Update network for user", Fields: fields}, nil
+	case "network-create":
+		fields := append([]AdminField{baseNetwork[0]}, baseNetwork[2:]...)
+		return &AdminForm{Kind: kind, Title: "Create network for user", Fields: fields}, nil
+	case "network-update":
+		return &AdminForm{Kind: "network-update-lookup", Title: "Load network settings", Fields: []AdminField{
+			userTarget,
+			networkTarget,
+		}}, nil
 	case "network-delete":
 		return &AdminForm{Kind: kind, Title: "Delete network for user", Fields: []AdminField{userTarget, networkTarget}}, nil
 	case "network-status":
@@ -245,9 +275,9 @@ func newAdminForm(kind string) (*AdminForm, error) {
 		}
 		return &AdminForm{Kind: kind, Title: map[string]string{"channel-delete": "Delete channel for user", "channel-status": "Show channels for user"}[kind], Fields: fields}, nil
 	case "cert-generate":
-		return &AdminForm{Kind: kind, Title: "Generate network certificate", Fields: []AdminField{userTarget, networkTarget, selectField("Key type", "rsa, ecdsa, ed25519", "rsa", "ecdsa", "ed25519"), field("RSA bits", "3072", false, false, "text", "ignored for ecdsa/ed25519")}}, nil
+		return &AdminForm{Kind: kind, Title: "Generate upstream SASL certificate", Fields: []AdminField{userTarget, networkTarget, selectField("Key type", "replaces the network's SASL EXTERNAL key: rsa, ecdsa, ed25519", "rsa", "ecdsa", "ed25519"), field("RSA bits", "3072", false, false, "text", "ignored for ecdsa/ed25519")}}, nil
 	case "cert-fingerprint":
-		return &AdminForm{Kind: kind, Title: "Show certificate fingerprints", Fields: []AdminField{userTarget, networkTarget}}, nil
+		return &AdminForm{Kind: kind, Title: "Show upstream CertFP fingerprints", Fields: []AdminField{userTarget, networkTarget}}, nil
 	case "sasl-status":
 		return &AdminForm{Kind: kind, Title: "Show SASL status", Fields: []AdminField{userTarget, networkTarget}}, nil
 	case "sasl-set-plain":
@@ -255,9 +285,9 @@ func newAdminForm(kind string) (*AdminForm, error) {
 	case "sasl-reset":
 		return &AdminForm{Kind: kind, Title: "Reset SASL", Fields: []AdminField{userTarget, networkTarget}}, nil
 	case "device-cert-status":
-		return &AdminForm{Kind: kind, Title: "Show device certificates", Fields: []AdminField{userTarget}}, nil
+		return &AdminForm{Kind: kind, Title: "Show client device certificates", Fields: []AdminField{userTarget}}, nil
 	case "device-cert-create":
-		return &AdminForm{Kind: kind, Title: "Create device certificate", Fields: []AdminField{userTarget, field("Fingerprint", "", true, false, "text", "certificate fingerprint"), field("Label", "", true, false, "text", "human-readable label")}}, nil
+		return &AdminForm{Kind: kind, Title: "Register client device certificate", Fields: []AdminField{userTarget, field("Fingerprint", "", true, false, "text", "downstream client certificate fingerprint; requires client-cert-auth"), field("Label", "", true, false, "text", "human-readable device label")}}, nil
 	case "device-cert-delete":
 		return &AdminForm{Kind: kind, Title: "Delete device certificate", Fields: []AdminField{userTarget, field("Fingerprint", "", true, false, "text", "certificate fingerprint")}}, nil
 	case "server-notice":
@@ -289,8 +319,11 @@ func (a *App) adminFormKeyLocked(key string, r rune) {
 			form.Cursor--
 		}
 	case "backspace":
-		if len(field.Value) > 0 {
-			field.Value = field.Value[:len(field.Value)-1]
+		if field.Kind == "text" {
+			runes := []rune(field.Value)
+			if len(runes) > 0 {
+				field.Value = string(runes[:len(runes)-1])
+			}
 		}
 	case "space":
 		if field.Kind == "text" {
@@ -311,7 +344,7 @@ func (a *App) adminFormKeyLocked(key string, r rune) {
 		a.admin.View = adminDashboard
 		a.setStatusLocked("form cancelled", 3e9)
 	default:
-		if r != 0 {
+		if r != 0 && field.Kind == "text" {
 			field.Value += string(r)
 		}
 	}
@@ -359,7 +392,11 @@ func (a *App) adminSubmitFormLocked() {
 	if op.Mutating {
 		a.admin.Confirm = &AdminConfirmation{Operation: op}
 		a.admin.View = adminOutput
-		a.setStatusLocked("review the redacted command, then press y to apply or n to cancel", 0)
+		if op.ConfirmPhrase != "" {
+			a.setStatusLocked("type the displayed phrase exactly and press Enter, or Esc to cancel", 0)
+		} else {
+			a.setStatusLocked("review the redacted command, then press y to apply or n to cancel", 0)
+		}
 		return
 	}
 	a.mu.Unlock()
@@ -367,15 +404,53 @@ func (a *App) adminSubmitFormLocked() {
 	a.mu.Lock()
 }
 
+func newNetworkUpdateForm(user string, network NetworkStatus) *AdminForm {
+	field := func(label, value string, required, secret bool, kind, help string) AdminField {
+		return AdminField{Label: label, Value: value, Original: value, Required: required, Secret: secret, Kind: kind, Help: help}
+	}
+	optional := func(label, value, help string) AdminField {
+		return field(label, value, false, false, "optional-bool", help)
+	}
+	enabled := "true"
+	if network.Disabled {
+		enabled = "false"
+	}
+	return &AdminForm{Kind: "network-update", Title: "Update network for user", Fields: []AdminField{
+		field("User", user, true, false, "readonly", "loaded target; cancel to choose a different user"),
+		field("Network", network.Target(), true, false, "readonly", "loaded target; cancel to choose a different network"),
+		field("Address", network.Address, false, false, "text", "loaded from sojuctl; cannot be empty"),
+		field("Name", network.Name, false, false, "text", "loaded from sojuctl; blank clears it only if changed"),
+		field("Nickname", "", false, false, "text", "not exposed by sojuctl; blank keeps current"),
+		field("Username", "", false, false, "text", "not exposed by sojuctl; blank keeps current"),
+		field("Password", "", false, true, "text", "never read or displayed; blank keeps current"),
+		field("Realname", "", false, false, "text", "not exposed by sojuctl; blank keeps current"),
+		field("CertFP", "", false, false, "text", "not exposed by sojuctl; blank keeps current"),
+		optional("Auto-away", "", "not exposed by sojuctl; unset keeps current"),
+		optional("Enabled", enabled, "loaded from network status"),
+		optional("Ignore limit", "", "not exposed by sojuctl; unset keeps current"),
+		field("Connect command", "", false, false, "text", "not exposed by sojuctl; blank keeps current"),
+	}}
+}
+
 func buildAdminOperation(config string, form *AdminForm) (AdminOperation, error) {
 	values := make(map[string]string, len(form.Fields))
+	originals := make(map[string]string, len(form.Fields))
 	for _, field := range form.Fields {
 		if strings.ContainsAny(field.Value, "\x00\r\n") {
 			return AdminOperation{}, fmt.Errorf("%s contains a forbidden control character", field.Label)
 		}
 		values[field.Label] = field.Value
+		originals[field.Label] = field.Original
 		if field.Required && strings.TrimSpace(field.Value) == "" {
 			return AdminOperation{}, fmt.Errorf("%s is required", field.Label)
+		}
+	}
+	if form.Kind == "network-update" {
+		if values["User"] != originals["User"] || values["Network"] != originals["Network"] {
+			return AdminOperation{}, errors.New("User and Network identify the loaded target and cannot be changed; cancel and load a different network")
+		}
+		if originals["Address"] != "" && strings.TrimSpace(values["Address"]) == "" {
+			return AdminOperation{}, errors.New("Address cannot be empty; cancel and delete the network if it is no longer needed")
 		}
 	}
 	boolArg := func(args *[]string, flagName, value string) error {
@@ -403,22 +478,32 @@ func buildAdminOperation(config string, form *AdminForm) (AdminOperation, error)
 	userRun := func(user string, commandParts ...string) []string {
 		return append([]string{"user", "run", user}, commandParts...)
 	}
-	networkArgs := func(includeAddress bool) ([]string, error) {
+	networkArgs := func(create bool) ([]string, error) {
 		args := []string{}
-		if includeAddress {
+		if create {
+			args = append(args, "-addr", values["Address"])
+		} else if values["Address"] != originals["Address"] {
 			args = append(args, "-addr", values["Address"])
 		}
 		for _, pair := range [][2]string{{"-name", "Name"}, {"-nick", "Nickname"}, {"-username", "Username"}, {"-pass", "Password"}, {"-realname", "Realname"}, {"-certfp", "CertFP"}, {"-connect-command", "Connect command"}} {
-			if values[pair[1]] != "" {
+			if (create && values[pair[1]] != "") || (!create && values[pair[1]] != originals[pair[1]]) {
 				args = append(args, pair[0], values[pair[1]])
 			}
 		}
 		for _, pair := range [][2]string{{"-auto-away", "Auto-away"}, {"-enabled", "Enabled"}} {
-			if err := boolArg(&args, pair[0], values[pair[1]]); err != nil {
+			value := values[pair[1]]
+			if !create && value == originals[pair[1]] {
+				value = ""
+			}
+			if err := boolArg(&args, pair[0], value); err != nil {
 				return nil, err
 			}
 		}
-		if err := presenceFlag(&args, "-ignore-limit", values["Ignore limit"]); err != nil {
+		ignoreLimit := values["Ignore limit"]
+		if !create && ignoreLimit == originals["Ignore limit"] {
+			ignoreLimit = ""
+		}
+		if err := presenceFlag(&args, "-ignore-limit", ignoreLimit); err != nil {
 			return nil, err
 		}
 		return args, nil
@@ -501,10 +586,17 @@ func buildAdminOperation(config string, form *AdminForm) (AdminOperation, error)
 		if form.Kind == "network-create" {
 			args = userRun(values["User"], append([]string{"network", "create"}, networkOptions...)...)
 		} else {
+			if len(networkOptions) == 0 {
+				return AdminOperation{}, errors.New("No network settings changed")
+			}
 			args = userRun(values["User"], append([]string{"network", "update", values["Network"]}, networkOptions...)...)
 		}
 		secrets = append(secrets, values["Password"])
 		refresh = userRun(values["User"], "network", "status")
+	case "network-update-lookup":
+		mutating = false
+		args = userRun(values["User"], "network", "status")
+		refresh = args
 	case "network-delete":
 		args = userRun(values["User"], "network", "delete", values["Network"])
 		refresh = userRun(values["User"], "network", "status")
@@ -589,6 +681,30 @@ func buildAdminOperation(config string, form *AdminForm) (AdminOperation, error)
 		summary += " / channel " + values["Channel"]
 	}
 	op := makeAdminOperation(config, summary, args, refresh, mutating, secrets)
+	switch form.Kind {
+	case "network-update-lookup":
+		op.FollowUpKind = "network-update"
+		op.TargetUser = values["User"]
+		op.TargetNetwork = values["Network"]
+	case "user-delete":
+		op.ConfirmPhrase = "DELETE USER " + values["Username"]
+	case "network-delete":
+		op.ConfirmPhrase = "DELETE NETWORK " + values["Network"]
+	case "network-quote":
+		op.ConfirmPhrase = "SEND RAW COMMAND"
+	case "channel-delete":
+		op.ConfirmPhrase = "DELETE CHANNEL " + values["Channel"]
+	case "cert-generate":
+		op.ConfirmPhrase = "REPLACE CERTIFICATE"
+	case "sasl-reset":
+		op.ConfirmPhrase = "RESET SASL"
+	case "device-cert-delete":
+		op.ConfirmPhrase = "DELETE DEVICE CERTIFICATE"
+	case "server-debug":
+		if values["Debug"] == "true" {
+			op.ConfirmPhrase = "ENABLE DEBUG"
+		}
+	}
 	if form.Kind == "user-delete" {
 		op.NeedsSojuConfirmation = true
 	}

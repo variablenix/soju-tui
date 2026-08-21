@@ -183,8 +183,8 @@ func drawAdminConfirmation(screen tcell.Screen, app *App, x, width, y, height in
 		boxWidth = 30
 	}
 	boxHeight := height
-	if boxHeight > 12 {
-		boxHeight = 12
+	if boxHeight > 14 {
+		boxHeight = 14
 	}
 	boxY := y + (height-boxHeight)/2
 	background := styleError.Background(tcell.ColorDarkRed)
@@ -201,7 +201,14 @@ func drawAdminConfirmation(screen tcell.Screen, app *App, x, width, y, height in
 		putClipped(screen, x+2, row, boxWidth-4, line, styleMuted.Background(tcell.ColorDarkRed))
 		row++
 	}
-	putClipped(screen, x+2, boxY+boxHeight-2, boxWidth-4, "Press y to apply · n or Esc to cancel", styleAccent.Background(tcell.ColorDarkRed))
+	if confirmation.Operation.ConfirmPhrase == "" {
+		putClipped(screen, x+2, boxY+boxHeight-2, boxWidth-4, "Press y to apply · n or Esc to cancel", styleAccent.Background(tcell.ColorDarkRed))
+		return
+	}
+	phraseRow := boxY + boxHeight - 4
+	putClipped(screen, x+2, phraseRow, boxWidth-4, "Type exactly: "+confirmation.Operation.ConfirmPhrase, styleAccent.Background(tcell.ColorDarkRed))
+	putClipped(screen, x+2, phraseRow+1, boxWidth-4, "> "+string(confirmation.Input), styleInput.Background(tcell.ColorDarkRed))
+	putClipped(screen, x+2, boxY+boxHeight-2, boxWidth-4, "Enter confirms · Esc cancels", styleAccent.Background(tcell.ColorDarkRed))
 }
 
 func drawExitConfirmation(screen tcell.Screen, app *App, x, width, y, height int) {

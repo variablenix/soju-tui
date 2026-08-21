@@ -208,6 +208,7 @@ runuser -u "$TARGET_USER" -- "$SOJUCTL_PATH" -config "$CONFIG_PATH" server statu
 
 if [ -x "$TUI_BINARY" ]; then
 	printf '\nSetup complete. Run as %s:\n  %s\n' "$TARGET_USER" "$TUI_BINARY"
+	printf 'The first TUI run will show the discovered hostname, admin socket, TLS certificate, config, and sojuctl paths for confirmation.\n'
 else
 	printf '\nSocket access is configured, but %s is missing. Build or download the correct binary first.\n' "$TUI_BINARY"
 fi
