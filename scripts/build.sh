@@ -67,15 +67,22 @@ fi
 
 command -v "$GO_BIN" >/dev/null 2>&1 || { echo "Go is required to build soju-tui" >&2; exit 1; }
 
-log "using $($GO_BIN version)"
 log "toolchain policy: GOTOOLCHAIN=$GO_TOOLCHAIN"
+log "using $(go_cmd version)"
 
 log "checking shell helpers"
 sh -n scripts/build.sh
 sh -n scripts/grant-admin-access.sh
 sh -n scripts/setup.sh
 log "downloading Go modules"
-go_cmd mod download
+if ! go_cmd mod download; then
+	if [ "$GO_TOOLCHAIN" = local ]; then
+		printf '%s\n' 'The installed local Go toolchain may be older than the version required by go.mod.' >&2
+		printf '%s\n' 'Upgrade Go, or explicitly allow Go to fetch the required toolchain:' >&2
+		printf '%s\n' '  GOTOOLCHAIN=auto ./scripts/build.sh --target linux-amd64' >&2
+	fi
+	exit 1
+fi
 log "running tests"
 go_cmd test ./...
 log "running go vet"

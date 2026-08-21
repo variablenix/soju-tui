@@ -1,10 +1,14 @@
 package main
 
 import (
+	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"regexp"
+	"strconv"
 	"strings"
+	"time"
 )
 
 type AdminMenuItem struct {
@@ -62,6 +66,10 @@ func isCertFPNotConfigured(output string) bool {
 	return strings.Contains(strings.ToLower(output), "certfp not set up")
 }
 
+func isCertificateFingerprintReport(output string) bool {
+	return strings.Contains(strings.ToLower(output), "sha-256 fingerprint:")
+}
+
 func (a *App) adminMenuItemsLocked() []AdminMenuItem {
 	items := adminMenuItems()
 	if !a.admin.Capabilities.Known {
@@ -85,9 +93,11 @@ func adminMenuItems() []AdminMenuItem {
 	return []AdminMenuItem{
 		{Label: "Server status", Kind: "server-status", Command: "server status"},
 		{Label: "View Soju host TLS certificate", Kind: "server-tls-certificate"},
-		{Label: "List users", Kind: "user-status", Command: "user status"},
+		{Label: "List all users", Kind: "user-status", Command: "user status"},
+		{Label: "Show specific user", Kind: "user-status-specific", Command: "user status"},
 		{Label: "Create user", Kind: "user-create", Command: "user create"},
 		{Label: "Update user", Kind: "user-update", Command: "user update"},
+		{Label: "Update user IRC identity", Kind: "user-identity-update", Command: "user update"},
 		{Label: "Delete user", Kind: "user-delete", Command: "user delete"},
 		{Label: "Network status for user", Kind: "network-status", Command: "network status"},
 		{Label: "Create network for user", Kind: "network-create", Command: "network create"},
@@ -156,9 +166,7 @@ func (a *App) adminHandleKey(key string, r rune) {
 				}
 				op := confirmation.Operation
 				a.admin.Confirm = nil
-				a.mu.Unlock()
-				a.requestOperation(op)
-				a.mu.Lock()
+				a.requestConfirmedOperationLocked(op)
 			default:
 				if r != 0 && r >= 0x20 && r != 0x7f {
 					confirmation.Input = append(confirmation.Input, r)
@@ -208,6 +216,23 @@ func (a *App) adminHandleKey(key string, r rune) {
 	}
 }
 
+func (a *App) requestConfirmedOperationLocked(operation AdminOperation) {
+	if operation.CertificateState != "" {
+		a.admin.PendingOperation = &operation
+		probe := makeAdminOperation(a.backend.Config, "Revalidate upstream SASL certificate", operation.Preflight, nil, false, nil)
+		probe.FollowUpKind = "cert-generate-guard"
+		probe.Quiet = true
+		a.mu.Unlock()
+		a.requestOperation(probe)
+		a.mu.Lock()
+		a.setStatusLocked("rechecking upstream CertFP state before generation...", 0)
+		return
+	}
+	a.mu.Unlock()
+	a.requestOperation(operation)
+	a.mu.Lock()
+}
+
 func (a *App) adminActivateMenuLocked(cursor int) {
 	items := a.adminMenuItemsLocked()
 	if cursor < 0 || cursor >= len(items) {
@@ -234,7 +259,7 @@ func (a *App) adminActivateMenuLocked(cursor int) {
 
 func adminFormRequiresExistingUser(kind string) bool {
 	switch kind {
-	case "user-update", "user-delete",
+	case "user-status-specific", "user-update", "user-identity-update", "user-delete",
 		"network-create", "network-update", "network-delete", "network-status", "network-quote",
 		"channel-create", "channel-update", "channel-delete", "channel-status",
 		"cert-generate", "cert-fingerprint",
@@ -334,6 +359,9 @@ func newAdminForm(kind string) (*AdminForm, error) {
 	optionalBool := func(label string) AdminField {
 		return field(label, "", false, false, "optional-bool", "Space cycles unset/true/false")
 	}
+	presenceField := func(label, help string) AdminField {
+		return field(label, "", false, false, "optional-flag", help+"; Space cycles unset/true")
+	}
 	selectField := func(label, help string, options ...string) AdminField {
 		value := ""
 		if len(options) > 0 {
@@ -353,11 +381,12 @@ func newAdminForm(kind string) (*AdminForm, error) {
 		field("Username", "", false, false, "text", "upstream username"),
 		field("Password", "", false, true, "text", "upstream server password"),
 		field("Realname", "", false, false, "text", "upstream real name"),
-		field("CertFP", "", false, false, "text", "SHA-512 certificate fingerprint"),
+		field("Server TLS fingerprint", "", false, false, "text", "optional SHA-256/SHA-512 upstream server certificate pin; not SASL CertFP"),
 		optionalBool("Auto-away"),
 		optionalBool("Enabled"),
-		optionalBool("Ignore limit"),
+		presenceField("Ignore limit", "admin-only override for this operation"),
 		field("Connect command", "", false, false, "text", "raw IRC command sent after connecting"),
+		field("Additional connect commands", "", false, false, "text", `optional JSON array, e.g. ["MODE nick +i","PRIVMSG NickServ :IDENTIFY ..."]`),
 	}
 	baseChannel := []AdminField{
 		userTarget,
@@ -371,6 +400,8 @@ func newAdminForm(kind string) (*AdminForm, error) {
 	}
 
 	switch kind {
+	case "user-status-specific":
+		return &AdminForm{Kind: kind, Title: "Show specific soju user", Fields: []AdminField{userTarget}}, nil
 	case "user-create":
 		return &AdminForm{Kind: kind, Title: "Create soju user", Fields: []AdminField{
 			field("Username", "", true, false, "text", "immutable account name"),
@@ -380,7 +411,7 @@ func newAdminForm(kind string) (*AdminForm, error) {
 			field("Realname", "", false, false, "text", "fallback IRC real name"),
 			boolField("Enabled", "true", false),
 			field("Max networks", "-1", false, false, "text", "0 none, -1 global default"),
-			optionalBool("Disable password"),
+			presenceField("Disable password", "disable password authentication for this account"),
 		}}, nil
 	case "user-update":
 		return &AdminForm{Kind: kind, Title: "Update soju user", Fields: []AdminField{
@@ -389,7 +420,14 @@ func newAdminForm(kind string) (*AdminForm, error) {
 			optionalBool("Admin"),
 			optionalBool("Enabled"),
 			field("Max networks", "", false, false, "text", "leave blank to keep current"),
-			optionalBool("Disable password"),
+			presenceField("Disable password", "disable password authentication; set a new password to re-enable it"),
+		}}, nil
+	case "user-identity-update":
+		return &AdminForm{Kind: kind, Title: "Update user's IRC identity", Fields: []AdminField{
+			userTarget,
+			field("Nickname", "", false, false, "text", "new fallback IRC nickname; blank keeps current"),
+			field("Realname", "", false, false, "text", "new fallback IRC real name; blank keeps current"),
+			selectField("Explicitly clear", "clear one saved identity value", "", "nickname", "realname"),
 		}}, nil
 	case "user-delete":
 		return &AdminForm{Kind: kind, Title: "Delete soju user", Fields: []AdminField{field("Username", "", true, false, "text", "account to delete")}}, nil
@@ -411,12 +449,16 @@ func newAdminForm(kind string) (*AdminForm, error) {
 		return &AdminForm{Kind: kind, Title: map[string]string{"channel-create": "Create channel for user", "channel-update": "Update channel for user"}[kind], Fields: baseChannel}, nil
 	case "channel-delete", "channel-status":
 		fields := []AdminField{userTarget, networkTarget}
+		if kind == "channel-status" {
+			fields[1].Required = false
+			fields[1].Help = "blank lists channels across all networks"
+		}
 		if kind == "channel-delete" {
 			fields = append(fields, field("Channel", "", true, false, "text", "channel to delete"))
 		}
 		return &AdminForm{Kind: kind, Title: map[string]string{"channel-delete": "Delete channel for user", "channel-status": "Show channels for user"}[kind], Fields: fields}, nil
 	case "cert-generate":
-		return &AdminForm{Kind: kind, Title: "Generate self-signed upstream IRC CertFP (host TLS is untouched)", Fields: []AdminField{userTarget, networkTarget, selectField("Key type", "replaces only this network's SASL EXTERNAL key: rsa, ecdsa, ed25519", "rsa", "ecdsa", "ed25519"), field("RSA bits", "3072", false, false, "text", "ignored for ecdsa/ed25519")}}, nil
+		return &AdminForm{Kind: kind, Title: "Generate self-signed upstream IRC CertFP (host TLS is untouched)", Fields: []AdminField{userTarget, networkTarget, selectField("Key type", "replaces only this network's SASL EXTERNAL key: rsa, ecdsa, ed25519", "rsa", "ecdsa", "ed25519"), field("RSA bits", "3072", false, false, "text", "RSA only; secure range 2048-8192")}}, nil
 	case "cert-fingerprint":
 		return &AdminForm{Kind: kind, Title: "Show upstream CertFP fingerprints", Fields: []AdminField{userTarget, networkTarget}}, nil
 	case "sasl-status":
@@ -508,6 +550,12 @@ func adminCycleField(field *AdminField) {
 		default:
 			field.Value = ""
 		}
+	case "optional-flag":
+		if field.Value == "true" {
+			field.Value = ""
+		} else {
+			field.Value = "true"
+		}
 	case "select":
 		for i, value := range field.Options {
 			if field.Value == value {
@@ -577,6 +625,12 @@ func newNetworkUpdateForm(user string, network NetworkStatus) *AdminForm {
 	optional := func(label, value, help string) AdminField {
 		return field(label, value, false, false, "optional-bool", help)
 	}
+	presence := func(label, help string) AdminField {
+		return field(label, "", false, false, "optional-flag", help+"; Space cycles unset/true")
+	}
+	selectField := func(label, help string, options ...string) AdminField {
+		return AdminField{Label: label, Kind: "select", Help: help, Options: options}
+	}
 	enabled := "true"
 	if network.Disabled {
 		enabled = "false"
@@ -590,11 +644,13 @@ func newNetworkUpdateForm(user string, network NetworkStatus) *AdminForm {
 		field("Username", "", false, false, "text", "not exposed by sojuctl; blank keeps current"),
 		field("Password", "", false, true, "text", "never read or displayed; blank keeps current"),
 		field("Realname", "", false, false, "text", "not exposed by sojuctl; blank keeps current"),
-		field("CertFP", "", false, false, "text", "not exposed by sojuctl; blank keeps current"),
+		field("Server TLS fingerprint", "", false, false, "text", "SHA-256/SHA-512 upstream server pin; blank keeps current; not SASL CertFP"),
 		optional("Auto-away", "", "not exposed by sojuctl; unset keeps current"),
 		optional("Enabled", enabled, "loaded from network status"),
-		optional("Ignore limit", "", "not exposed by sojuctl; unset keeps current"),
-		field("Connect command", "", false, false, "text", "not exposed by sojuctl; blank keeps current"),
+		presence("Ignore limit", "admin-only override for this operation"),
+		field("Connect command", "", false, false, "text", "not exposed by sojuctl; entering commands replaces the saved list"),
+		field("Additional connect commands", "", false, false, "text", "optional JSON array; combined maximum is 20 commands"),
+		selectField("Explicitly clear", "clear one undisclosed saved value", "", "password", "server TLS fingerprint", "nickname", "username", "realname", "connect commands"),
 	}}
 }
 
@@ -613,10 +669,10 @@ func buildAdminOperation(config string, form *AdminForm) (AdminOperation, error)
 	}
 	if form.Kind == "network-update" {
 		if values["User"] != originals["User"] || values["Network"] != originals["Network"] {
-			return AdminOperation{}, errors.New("User and Network identify the loaded target and cannot be changed; cancel and load a different network")
+			return AdminOperation{}, errors.New("user and network identify the loaded target and cannot be changed; cancel and load a different network")
 		}
 		if originals["Address"] != "" && strings.TrimSpace(values["Address"]) == "" {
-			return AdminOperation{}, errors.New("Address cannot be empty; cancel and delete the network if it is no longer needed")
+			return AdminOperation{}, errors.New("address cannot be empty; cancel and delete the network if it is no longer needed")
 		}
 	}
 	boolArg := func(args *[]string, flagName, value string) error {
@@ -644,17 +700,74 @@ func buildAdminOperation(config string, form *AdminForm) (AdminOperation, error)
 	userRun := func(user string, commandParts ...string) []string {
 		return append([]string{"user", "run", user}, commandParts...)
 	}
+	var networkCommandSecrets []string
 	networkArgs := func(create bool) ([]string, error) {
 		args := []string{}
-		if create {
-			args = append(args, "-addr", values["Address"])
-		} else if values["Address"] != originals["Address"] {
-			args = append(args, "-addr", values["Address"])
+		address := values["Address"]
+		if strings.HasPrefix(address, "irc+unix://") {
+			// Current Soju connection code accepts both spellings, while its
+			// service command validator and published manual disagree. The
+			// shorter spelling works through both layers.
+			address = "unix://" + strings.TrimPrefix(address, "irc+unix://")
 		}
-		for _, pair := range [][2]string{{"-name", "Name"}, {"-nick", "Nickname"}, {"-username", "Username"}, {"-pass", "Password"}, {"-realname", "Realname"}, {"-certfp", "CertFP"}, {"-connect-command", "Connect command"}} {
+		if create {
+			args = append(args, "-addr", address)
+		} else if values["Address"] != originals["Address"] {
+			args = append(args, "-addr", address)
+		}
+		for _, pair := range [][2]string{{"-name", "Name"}, {"-nick", "Nickname"}, {"-username", "Username"}, {"-pass", "Password"}, {"-realname", "Realname"}, {"-certfp", "Server TLS fingerprint"}} {
 			if (create && values[pair[1]] != "") || (!create && values[pair[1]] != originals[pair[1]]) {
 				args = append(args, pair[0], values[pair[1]])
 			}
+		}
+		connectCommands := make([]string, 0, 20)
+		if values["Connect command"] != "" {
+			connectCommands = append(connectCommands, values["Connect command"])
+		}
+		if encoded := strings.TrimSpace(values["Additional connect commands"]); encoded != "" {
+			var additional []string
+			if err := json.Unmarshal([]byte(encoded), &additional); err != nil {
+				return nil, fmt.Errorf("additional connect commands must be a JSON array of strings: %w", err)
+			}
+			connectCommands = append(connectCommands, additional...)
+		}
+		if len(connectCommands) > 20 {
+			return nil, errors.New("soju accepts at most 20 connect commands")
+		}
+		for index, command := range connectCommands {
+			if command == "" {
+				return nil, fmt.Errorf("connect command %d is empty", index+1)
+			}
+			if strings.ContainsAny(command, "\x00\r\n") {
+				return nil, fmt.Errorf("connect command %d contains a forbidden control character", index+1)
+			}
+			networkCommandSecrets = append(networkCommandSecrets, command)
+		}
+		for _, command := range connectCommands {
+			args = append(args, "-connect-command", command)
+		}
+		clearSelection := values["Explicitly clear"]
+		clearFields := map[string][2]string{
+			"password":               {"-pass", "Password"},
+			"server TLS fingerprint": {"-certfp", "Server TLS fingerprint"},
+			"nickname":               {"-nick", "Nickname"},
+			"username":               {"-username", "Username"},
+			"realname":               {"-realname", "Realname"},
+			"connect commands":       {"-connect-command", "Connect command"},
+		}
+		if clearSelection != "" {
+			clearField, ok := clearFields[clearSelection]
+			if !ok {
+				return nil, fmt.Errorf("unknown Explicitly clear selection %q", clearSelection)
+			}
+			if clearSelection == "connect commands" {
+				if len(connectCommands) > 0 {
+					return nil, errors.New("clearing connect commands cannot be combined with new connect commands")
+				}
+			} else if values[clearField[1]] != "" {
+				return nil, fmt.Errorf("clearing %s cannot be combined with a new value", clearSelection)
+			}
+			args = append(args, clearField[0], "")
 		}
 		for _, pair := range [][2]string{{"-auto-away", "Auto-away"}, {"-enabled", "Enabled"}} {
 			value := values[pair[1]]
@@ -688,18 +801,25 @@ func buildAdminOperation(config string, form *AdminForm) (AdminOperation, error)
 	}
 
 	mutating := true
-	refresh := []string{"server", "status"}
+	var refresh []string
 	var preflight []string
 	secrets := []string{}
 	var args []string
 	summary := form.Title
 	switch form.Kind {
+	case "user-status-specific":
+		mutating = false
+		args = []string{"user", "status", values["User"]}
+		refresh = args
 	case "user-create":
+		if _, err := parseMaxNetworks(values["Max networks"]); err != nil {
+			return AdminOperation{}, err
+		}
 		if values["Disable password"] == "true" && values["Password"] != "" {
-			return AdminOperation{}, errors.New("Password must be empty when Disable password is true")
+			return AdminOperation{}, errors.New("password must be empty when Disable password is true")
 		}
 		if values["Disable password"] != "true" && strings.TrimSpace(values["Password"]) == "" {
-			return AdminOperation{}, errors.New("Password is required unless Disable password is true")
+			return AdminOperation{}, errors.New("password is required unless Disable password is true")
 		}
 		args = []string{"user", "create", "-username", values["Username"]}
 		if values["Password"] != "" {
@@ -729,8 +849,13 @@ func buildAdminOperation(config string, form *AdminForm) (AdminOperation, error)
 		}
 		refresh = []string{"user", "status"}
 	case "user-update":
+		if values["Max networks"] != "" {
+			if _, err := parseMaxNetworks(values["Max networks"]); err != nil {
+				return AdminOperation{}, err
+			}
+		}
 		if values["Disable password"] == "true" && values["New password"] != "" {
-			return AdminOperation{}, errors.New("New password must be empty when Disable password is true")
+			return AdminOperation{}, errors.New("new password must be empty when Disable password is true")
 		}
 		args = []string{"user", "update", values["Username"]}
 		if values["New password"] != "" {
@@ -748,11 +873,44 @@ func buildAdminOperation(config string, form *AdminForm) (AdminOperation, error)
 		if values["Max networks"] != "" {
 			args = append(args, "-max-networks", values["Max networks"])
 		}
+		if len(args) == 3 {
+			return AdminOperation{}, errors.New("no user settings changed")
+		}
 		refresh = []string{"user", "status"}
+	case "user-identity-update":
+		args = userRun(values["User"], "user", "update")
+		for _, pair := range [][2]string{{"-nick", "Nickname"}, {"-realname", "Realname"}} {
+			if values[pair[1]] != "" {
+				args = append(args, pair[0], values[pair[1]])
+			}
+		}
+		if clearSelection := values["Explicitly clear"]; clearSelection != "" {
+			clearFlags := map[string][2]string{
+				"nickname": {"-nick", "Nickname"},
+				"realname": {"-realname", "Realname"},
+			}
+			clearField, ok := clearFlags[clearSelection]
+			if !ok {
+				return AdminOperation{}, fmt.Errorf("unknown Explicitly clear selection %q", clearSelection)
+			}
+			if values[clearField[1]] != "" {
+				return AdminOperation{}, fmt.Errorf("clearing %s cannot be combined with a new value", clearSelection)
+			}
+			args = append(args, clearField[0], "")
+		}
+		if len(args) == 5 {
+			return AdminOperation{}, errors.New("no IRC identity settings changed")
+		}
+		refresh = []string{"user", "status", values["User"]}
 	case "user-delete":
 		args = []string{"user", "delete", values["Username"]}
 		refresh = []string{"user", "status"}
 	case "network-create", "network-update":
+		if fingerprint := values["Server TLS fingerprint"]; fingerprint != "" {
+			if err := validateFingerprint(fingerprint, 32, 64); err != nil {
+				return AdminOperation{}, fmt.Errorf("server TLS fingerprint: %w", err)
+			}
+		}
 		networkOptions, err := networkArgs(form.Kind == "network-create")
 		if err != nil {
 			return AdminOperation{}, err
@@ -761,11 +919,12 @@ func buildAdminOperation(config string, form *AdminForm) (AdminOperation, error)
 			args = userRun(values["User"], append([]string{"network", "create"}, networkOptions...)...)
 		} else {
 			if len(networkOptions) == 0 {
-				return AdminOperation{}, errors.New("No network settings changed")
+				return AdminOperation{}, errors.New("no network settings changed")
 			}
 			args = userRun(values["User"], append([]string{"network", "update", values["Network"]}, networkOptions...)...)
 		}
 		secrets = append(secrets, values["Password"])
+		secrets = append(secrets, networkCommandSecrets...)
 		refresh = userRun(values["User"], "network", "status")
 	case "network-update-lookup":
 		mutating = false
@@ -780,8 +939,15 @@ func buildAdminOperation(config string, form *AdminForm) (AdminOperation, error)
 		refresh = args
 	case "network-quote":
 		args = userRun(values["User"], "network", "quote", values["Network"], values["IRC command"])
+		secrets = append(secrets, values["IRC command"])
 		refresh = userRun(values["User"], "network", "status")
 	case "channel-create", "channel-update":
+		if duration := values["Detach after"]; duration != "" {
+			parsed, err := time.ParseDuration(duration)
+			if err != nil || parsed < 0 {
+				return AdminOperation{}, errors.New("detach after must be 0 or a non-negative Go duration such as 30m or 2h")
+			}
+		}
 		channelOptions, err := channelArgs()
 		if err != nil {
 			return AdminOperation{}, err
@@ -789,6 +955,9 @@ func buildAdminOperation(config string, form *AdminForm) (AdminOperation, error)
 		if form.Kind == "channel-create" {
 			args = userRun(values["User"], append([]string{"channel", "create", values["Channel"] + "/" + values["Network"]}, channelOptions...)...)
 		} else {
+			if len(channelOptions) == 0 {
+				return AdminOperation{}, errors.New("no channel settings changed")
+			}
 			args = userRun(values["User"], append([]string{"channel", "update", values["Channel"] + "/" + values["Network"]}, channelOptions...)...)
 		}
 		refresh = userRun(values["User"], "channel", "status", "-network", values["Network"])
@@ -797,9 +966,18 @@ func buildAdminOperation(config string, form *AdminForm) (AdminOperation, error)
 		refresh = userRun(values["User"], "channel", "status", "-network", values["Network"])
 	case "channel-status":
 		mutating = false
-		args = userRun(values["User"], "channel", "status", "-network", values["Network"])
+		args = userRun(values["User"], "channel", "status")
+		if values["Network"] != "" {
+			args = append(args, "-network", values["Network"])
+		}
 		refresh = args
 	case "cert-generate":
+		if values["Key type"] == "rsa" || values["Key type"] == "" {
+			bits, err := strconv.Atoi(values["RSA bits"])
+			if err != nil || bits < 2048 || bits > 8192 {
+				return AdminOperation{}, errors.New("RSA key size must be an integer from 2048 through 8192 bits")
+			}
+		}
 		args = userRun(values["User"], "certfp", "generate", "-network", values["Network"])
 		preflight = userRun(values["User"], "certfp", "fingerprint", "-network", values["Network"])
 		if values["Key type"] != "" && values["Key type"] != "rsa" {
@@ -829,9 +1007,15 @@ func buildAdminOperation(config string, form *AdminForm) (AdminOperation, error)
 		args = userRun(values["User"], "device-certificate", "status")
 		refresh = args
 	case "device-cert-create":
+		if err := validateFingerprint(values["Fingerprint"], 64); err != nil {
+			return AdminOperation{}, fmt.Errorf("fingerprint: %w", err)
+		}
 		args = userRun(values["User"], "device-certificate", "create", "-fingerprint", values["Fingerprint"], "-label", values["Label"])
 		refresh = userRun(values["User"], "device-certificate", "status")
 	case "device-cert-delete":
+		if err := validateFingerprintRange(values["Fingerprint"], 6, 64); err != nil {
+			return AdminOperation{}, fmt.Errorf("fingerprint: %w", err)
+		}
 		args = userRun(values["User"], "device-certificate", "delete", values["Fingerprint"])
 		refresh = userRun(values["User"], "device-certificate", "status")
 	case "server-notice":
@@ -839,7 +1023,7 @@ func buildAdminOperation(config string, form *AdminForm) (AdminOperation, error)
 		refresh = []string{"server", "status"}
 	case "server-debug":
 		if values["Debug"] != "true" && values["Debug"] != "false" {
-			return AdminOperation{}, errors.New("Debug must be true or false")
+			return AdminOperation{}, errors.New("debug must be true or false")
 		}
 		args = []string{"server", "debug", values["Debug"]}
 		refresh = []string{"server", "status"}
@@ -868,20 +1052,49 @@ func buildAdminOperation(config string, form *AdminForm) (AdminOperation, error)
 		op.FollowUpKind = "network-update"
 		op.TargetUser = values["User"]
 		op.TargetNetwork = values["Network"]
+	case "user-create":
+		if values["Admin"] == "true" {
+			op.ConfirmPhrase = "CREATE ADMIN USER"
+		}
+	case "user-update":
+		if values["Admin"] != "" {
+			op.ConfirmPhrase = "CHANGE USER ADMIN STATUS"
+		}
 	case "user-delete":
 		op.ConfirmPhrase = "DELETE USER " + values["Username"]
 	case "network-delete":
 		op.ConfirmPhrase = "DELETE NETWORK " + values["Network"]
 	case "network-quote":
 		op.ConfirmPhrase = "SEND RAW COMMAND"
+	case "network-create", "network-update":
+		switch {
+		case values["Explicitly clear"] != "":
+			op.ConfirmPhrase = "CLEAR NETWORK SETTING"
+		case values["Server TLS fingerprint"] != "":
+			op.ConfirmPhrase = "CHANGE SERVER TLS PIN"
+		case values["Connect command"] != "" || values["Additional connect commands"] != "":
+			op.ConfirmPhrase = "SET NETWORK CONNECT COMMANDS"
+		case values["Ignore limit"] == "true":
+			op.ConfirmPhrase = "IGNORE NETWORK LIMIT"
+		}
+	case "user-identity-update":
+		if values["Explicitly clear"] != "" {
+			op.ConfirmPhrase = "CLEAR USER IDENTITY SETTING"
+		}
 	case "channel-delete":
 		op.ConfirmPhrase = "DELETE CHANNEL " + values["Channel"]
 	case "cert-generate":
 		op.ConfirmPhrase = "GENERATE OR REPLACE UPSTREAM CERTIFICATE"
+	case "sasl-set-plain":
+		op.ConfirmPhrase = "SET SASL PLAIN"
 	case "sasl-reset":
 		op.ConfirmPhrase = "RESET SASL"
+	case "device-cert-create":
+		op.ConfirmPhrase = "REGISTER DEVICE CERTIFICATE"
 	case "device-cert-delete":
 		op.ConfirmPhrase = "DELETE DEVICE CERTIFICATE"
+	case "server-notice":
+		op.ConfirmPhrase = "BROADCAST SERVER NOTICE"
 	case "server-debug":
 		if values["Debug"] == "true" {
 			op.ConfirmPhrase = "ENABLE DEBUG"
@@ -894,6 +1107,50 @@ func buildAdminOperation(config string, form *AdminForm) (AdminOperation, error)
 		op.NeedsSojuConfirmation = true
 	}
 	return op, nil
+}
+
+func parseMaxNetworks(value string) (int, error) {
+	limit, err := strconv.Atoi(value)
+	if err != nil || limit < -1 {
+		return 0, errors.New("max networks must be an integer of -1 or greater")
+	}
+	return limit, nil
+}
+
+func validateFingerprint(value string, allowedByteLengths ...int) error {
+	decoded, err := decodeFingerprint(value)
+	if err != nil {
+		return err
+	}
+	for _, length := range allowedByteLengths {
+		if len(decoded) == length {
+			return nil
+		}
+	}
+	lengths := make([]string, 0, len(allowedByteLengths))
+	for _, length := range allowedByteLengths {
+		lengths = append(lengths, strconv.Itoa(length*8))
+	}
+	return fmt.Errorf("must be a %s-bit fingerprint", strings.Join(lengths, " or "))
+}
+
+func validateFingerprintRange(value string, minimumBytes, maximumBytes int) error {
+	decoded, err := decodeFingerprint(value)
+	if err != nil {
+		return err
+	}
+	if len(decoded) < minimumBytes || len(decoded) > maximumBytes {
+		return fmt.Errorf("must contain between %d and %d fingerprint bytes", minimumBytes, maximumBytes)
+	}
+	return nil
+}
+
+func decodeFingerprint(value string) ([]byte, error) {
+	decoded, err := hex.DecodeString(strings.ReplaceAll(value, ":", ""))
+	if err != nil {
+		return nil, errors.New("must contain only hexadecimal bytes, with optional colons")
+	}
+	return decoded, nil
 }
 
 func makeAdminOperation(config, summary string, args, refresh []string, mutating bool, secrets []string) AdminOperation {

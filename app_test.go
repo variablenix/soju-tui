@@ -229,7 +229,7 @@ func TestParseSojuUsernames(t *testing.T) {
 
 func TestUserTargetFormsReceiveDiscoverableAndCustomSelector(t *testing.T) {
 	userTargetedKinds := []string{
-		"user-update", "user-delete",
+		"user-status-specific", "user-update", "user-identity-update", "user-delete",
 		"network-create", "network-update", "network-delete", "network-status", "network-quote",
 		"channel-create", "channel-update", "channel-delete", "channel-status",
 		"cert-generate", "cert-fingerprint",
@@ -301,6 +301,9 @@ func TestCertificatePreflightRequiresReplacementPhraseWhenExisting(t *testing.T)
 	if app.admin.Confirm == nil || app.admin.Confirm.Operation.ConfirmPhrase != "REPLACE EXISTING UPSTREAM CERTIFICATE" {
 		t.Fatalf("existing certificate confirmation = %#v", app.admin.Confirm)
 	}
+	if app.admin.Confirm.Operation.CertificateState != "existing" || app.admin.Confirm.Operation.CertificateReport == "" {
+		t.Fatalf("existing certificate guard state = %#v", app.admin.Confirm.Operation)
+	}
 	output := strings.Join(app.admin.Output, "\n")
 	if !strings.Contains(output, "EXISTING UPSTREAM SASL CERTIFICATE FOUND") || !strings.Contains(output, "AA:BB:CC") || !strings.Contains(output, "Let's Encrypt files are not touched") {
 		t.Fatalf("existing certificate warning = %q", output)
@@ -319,6 +322,9 @@ func TestCertificatePreflightRequiresGenerationPhraseWhenAbsent(t *testing.T) {
 	})
 	if app.admin.Confirm == nil || app.admin.Confirm.Operation.ConfirmPhrase != "GENERATE UPSTREAM CERTIFICATE" {
 		t.Fatalf("new certificate confirmation = %#v", app.admin.Confirm)
+	}
+	if app.admin.Confirm.Operation.CertificateState != "absent" {
+		t.Fatalf("absent certificate guard state = %#v", app.admin.Confirm.Operation)
 	}
 	if !strings.Contains(strings.Join(app.admin.Output, "\n"), "No existing upstream SASL CertFP") {
 		t.Fatalf("missing no-certificate explanation: %#v", app.admin.Output)
@@ -340,6 +346,57 @@ func TestCertificatePreflightFailsClosed(t *testing.T) {
 	}
 	if !strings.Contains(strings.Join(app.admin.Output, "\n"), "blocked") && !strings.Contains(app.currentStatusLocked(), "blocked") {
 		t.Fatalf("failed preflight was not explained: output=%#v status=%q", app.admin.Output, app.currentStatusLocked())
+	}
+	app.close()
+}
+
+func TestCertificatePreflightRejectsMalformedSuccess(t *testing.T) {
+	app := newTestApp()
+	planned := AdminOperation{Summary: "Generate upstream CertFP", Mutating: true}
+	app.admin.PendingOperation = &planned
+	app.processResult(adminResult{
+		Operation: AdminOperation{FollowUpKind: "cert-generate-preflight", Quiet: true},
+		Output:    "certificate exists maybe\n",
+	})
+	if app.admin.Confirm != nil || app.admin.PendingOperation != nil {
+		t.Fatalf("malformed successful response allowed generation: confirm=%#v pending=%#v", app.admin.Confirm, app.admin.PendingOperation)
+	}
+	if !strings.Contains(strings.Join(app.admin.Output, "\n"), "unexpected fingerprint response") {
+		t.Fatalf("malformed response was not explained: %#v", app.admin.Output)
+	}
+	app.close()
+}
+
+func TestCertificateStateGuardMatchesOnlyReviewedState(t *testing.T) {
+	existing := AdminOperation{CertificateState: "existing", CertificateReport: "SHA-256 fingerprint: AA\nSHA-512 fingerprint: BB"}
+	if !certificateStateMatches(existing, " SHA-256 fingerprint: AA \n SHA-512 fingerprint: BB\n", nil) {
+		t.Fatal("unchanged existing certificate did not match")
+	}
+	if certificateStateMatches(existing, "SHA-256 fingerprint: CC\nSHA-512 fingerprint: DD", nil) {
+		t.Fatal("changed existing certificate matched")
+	}
+	absent := AdminOperation{CertificateState: "absent"}
+	if !certificateStateMatches(absent, "CertFP not set up\n", errors.New("exit status 1")) {
+		t.Fatal("unchanged absent state did not match")
+	}
+	if certificateStateMatches(absent, "permission denied\n", errors.New("exit status 1")) {
+		t.Fatal("unexpected error matched absent state")
+	}
+}
+
+func TestCertificateGuardBlocksStateChange(t *testing.T) {
+	app := newTestApp()
+	planned := AdminOperation{CertificateState: "existing", CertificateReport: "SHA-256 fingerprint: AA"}
+	app.admin.PendingOperation = &planned
+	app.processResult(adminResult{
+		Operation: AdminOperation{FollowUpKind: "cert-generate-guard", Quiet: true},
+		Output:    "SHA-256 fingerprint: BB\n",
+	})
+	if app.admin.PendingOperation != nil || app.admin.Busy {
+		t.Fatalf("changed state was not stopped: pending=%#v busy=%v", app.admin.PendingOperation, app.admin.Busy)
+	}
+	if !strings.Contains(strings.Join(app.admin.Output, "\n"), "state changed") {
+		t.Fatalf("state change was not explained: %#v", app.admin.Output)
 	}
 	app.close()
 }

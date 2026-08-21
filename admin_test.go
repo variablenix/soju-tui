@@ -36,6 +36,36 @@ func TestAdminUserCreateUsesArgvAndRedactsPassword(t *testing.T) {
 	}
 }
 
+func TestPrivilegeAndBroadcastChangesRequireTypedConfirmation(t *testing.T) {
+	adminUser, err := newAdminForm("user-create")
+	if err != nil {
+		t.Fatal(err)
+	}
+	adminUser.Fields[0].Value = "operator"
+	adminUser.Fields[1].Value = "secret"
+	adminUser.Fields[2].Value = "true"
+	op, err := buildAdminOperation("/etc/soju/config", adminUser)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if op.ConfirmPhrase != "CREATE ADMIN USER" {
+		t.Fatalf("admin creation confirmation = %q", op.ConfirmPhrase)
+	}
+
+	notice, err := newAdminForm("server-notice")
+	if err != nil {
+		t.Fatal(err)
+	}
+	notice.Fields[0].Value = "maintenance soon"
+	op, err = buildAdminOperation("/etc/soju/config", notice)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if op.ConfirmPhrase != "BROADCAST SERVER NOTICE" {
+		t.Fatalf("broadcast confirmation = %q", op.ConfirmPhrase)
+	}
+}
+
 func TestAdminUserCreateOmitsUnchangedDefaults(t *testing.T) {
 	form, err := newAdminForm("user-create")
 	if err != nil {
@@ -124,6 +154,9 @@ func TestAdminNetworkQuotePreservesRawCommand(t *testing.T) {
 	if len(op.Args) == 0 || op.Args[len(op.Args)-1] != "PRIVMSG NickServ :IDENTIFY a password" {
 		t.Fatalf("raw command was not kept as one argv value: %#v", op.Args)
 	}
+	if strings.Contains(op.Preview, "IDENTIFY a password") || !strings.Contains(op.Preview, "••••••") {
+		t.Fatalf("potentially secret raw command leaked in preview: %q", op.Preview)
+	}
 }
 
 func TestAdminRejectsIRCLineInjection(t *testing.T) {
@@ -170,6 +203,19 @@ func TestAdminChannelCreateTargetsNetworkInName(t *testing.T) {
 	}
 }
 
+func TestAdminChannelUpdateRejectsNoChanges(t *testing.T) {
+	form, err := newAdminForm("channel-update")
+	if err != nil {
+		t.Fatal(err)
+	}
+	form.Fields[0].Value = "alice"
+	form.Fields[1].Value = "libera"
+	form.Fields[2].Value = "#chat"
+	if _, err := buildAdminOperation("/etc/soju/config", form); err == nil || !strings.Contains(err.Error(), "no channel settings changed") {
+		t.Fatalf("expected no-change rejection, got %v", err)
+	}
+}
+
 func TestParseUserDeleteConfirmation(t *testing.T) {
 	args, username, ok := parseUserDeleteConfirmation(`To confirm user deletion, send "user delete alice 0123ab"`)
 	if !ok || username != "alice" || len(args) != 4 || args[2] != "alice" || args[3] != "0123ab" {
@@ -190,6 +236,27 @@ func TestResetSASLRequiresTypedConfirmation(t *testing.T) {
 	}
 	if op.ConfirmPhrase != "RESET SASL" {
 		t.Fatalf("confirmation phrase = %q", op.ConfirmPhrase)
+	}
+}
+
+func TestSetSASLPlainRequiresTypedConfirmationAndRedactsPassword(t *testing.T) {
+	form, err := newAdminForm("sasl-set-plain")
+	if err != nil {
+		t.Fatal(err)
+	}
+	form.Fields[0].Value = "alice"
+	form.Fields[1].Value = "libera"
+	form.Fields[2].Value = "alice-account"
+	form.Fields[3].Value = "upstream secret"
+	op, err := buildAdminOperation("/etc/soju/config", form)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if op.ConfirmPhrase != "SET SASL PLAIN" {
+		t.Fatalf("confirmation phrase = %q", op.ConfirmPhrase)
+	}
+	if strings.Contains(op.Preview, "upstream secret") || !strings.Contains(op.Preview, "••••••") {
+		t.Fatalf("SASL password leaked in preview: %q", op.Preview)
 	}
 }
 
@@ -227,6 +294,267 @@ func TestCertificateGenerationUsesCompatibleDefaults(t *testing.T) {
 	}
 }
 
+func TestCertificateGenerationRejectsInvalidRSABits(t *testing.T) {
+	form, err := newAdminForm("cert-generate")
+	if err != nil {
+		t.Fatal(err)
+	}
+	form.Fields[0].Value = "alice"
+	form.Fields[1].Value = "libera"
+	for _, invalid := range []string{"", "zero", "0", "1024", "8193"} {
+		form.Fields[3].Value = invalid
+		if _, err := buildAdminOperation("/etc/soju/config", form); err == nil {
+			t.Fatalf("RSA bits %q were accepted", invalid)
+		}
+	}
+}
+
+func TestNetworkFormUsesCorrectUnixSchemeAndServerPinTerminology(t *testing.T) {
+	form, err := newAdminForm("network-create")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(form.Fields[1].Help, "irc+unix:///path") {
+		t.Fatalf("network address help = %q", form.Fields[1].Help)
+	}
+	if form.Fields[7].Label != "Server TLS fingerprint" || !strings.Contains(form.Fields[7].Help, "not SASL CertFP") {
+		t.Fatalf("server pin field = %#v", form.Fields[7])
+	}
+}
+
+func TestNetworkNormalizesDocumentedUnixAddressForSojuCtl(t *testing.T) {
+	form, err := newAdminForm("network-create")
+	if err != nil {
+		t.Fatal(err)
+	}
+	form.Fields[0].Value = "alice"
+	form.Fields[1].Value = "irc+unix:///run/irc/upstream.sock"
+	op, err := buildAdminOperation("/etc/soju/config", form)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := strings.Join(op.Args, "\x00"); !strings.Contains(got, "-addr\x00unix:///run/irc/upstream.sock") {
+		t.Fatalf("Unix address was not normalized: %#v", op.Args)
+	}
+}
+
+func TestNetworkSupportsRepeatedAndClearedConnectCommands(t *testing.T) {
+	form, err := newAdminForm("network-create")
+	if err != nil {
+		t.Fatal(err)
+	}
+	form.Fields[0].Value = "alice"
+	form.Fields[1].Value = "ircs://irc.example.test:6697"
+	form.Fields[11].Value = "MODE alice +i"
+	form.Fields[12].Value = `["PRIVMSG NickServ :IDENTIFY account secret","JOIN #ops"]`
+	op, err := buildAdminOperation("/etc/soju/config", form)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var commands []string
+	for index, arg := range op.Args {
+		if arg == "-connect-command" && index+1 < len(op.Args) {
+			commands = append(commands, op.Args[index+1])
+		}
+	}
+	if got := strings.Join(commands, "|"); got != "MODE alice +i|PRIVMSG NickServ :IDENTIFY account secret|JOIN #ops" {
+		t.Fatalf("connect commands = %q; args=%#v", got, op.Args)
+	}
+	if strings.Contains(op.Preview, "IDENTIFY account secret") || !strings.Contains(op.Preview, "••••••") {
+		t.Fatalf("connect command leaked in preview: %q", op.Preview)
+	}
+	if op.ConfirmPhrase != "SET NETWORK CONNECT COMMANDS" {
+		t.Fatalf("connect command confirmation = %q", op.ConfirmPhrase)
+	}
+
+	update := newNetworkUpdateForm("alice", NetworkStatus{Name: "libera", Address: "ircs://irc.example.test:6697"})
+	update.Fields[len(update.Fields)-1].Value = "connect commands"
+	op, err = buildAdminOperation("/etc/soju/config", update)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := strings.Join(op.Args, "\x00"); !strings.Contains(got, "-connect-command\x00") {
+		t.Fatalf("clear connect commands missing: %#v", op.Args)
+	}
+	if op.ConfirmPhrase != "CLEAR NETWORK SETTING" {
+		t.Fatalf("clear confirmation = %q", op.ConfirmPhrase)
+	}
+}
+
+func TestNetworkCanExplicitlyClearUndisclosedSettings(t *testing.T) {
+	form := newNetworkUpdateForm("alice", NetworkStatus{Name: "libera", Address: "ircs://irc.example.test:6697"})
+	form.Fields[len(form.Fields)-1].Value = "server TLS fingerprint"
+	op, err := buildAdminOperation("/etc/soju/config", form)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := strings.Join(op.Args, "\x00"); !strings.Contains(got, "-certfp\x00") {
+		t.Fatalf("clear server pin missing: %#v", op.Args)
+	}
+	if op.ConfirmPhrase != "CLEAR NETWORK SETTING" {
+		t.Fatalf("clear confirmation = %q", op.ConfirmPhrase)
+	}
+	form.Fields[8].Value = strings.Repeat("AA", 32)
+	if _, err := buildAdminOperation("/etc/soju/config", form); err == nil {
+		t.Fatal("clear and replace of the same setting was accepted")
+	}
+}
+
+func TestNetworkTLSPinRequiresTypedConfirmation(t *testing.T) {
+	form, err := newAdminForm("network-create")
+	if err != nil {
+		t.Fatal(err)
+	}
+	form.Fields[0].Value = "alice"
+	form.Fields[1].Value = "ircs://irc.example.test:6697"
+	form.Fields[7].Value = strings.Repeat("AA", 32)
+	op, err := buildAdminOperation("/etc/soju/config", form)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if op.ConfirmPhrase != "CHANGE SERVER TLS PIN" {
+		t.Fatalf("server TLS pin confirmation = %q", op.ConfirmPhrase)
+	}
+}
+
+func TestAdminRejectsInvalidLimitsFingerprintsAndDurations(t *testing.T) {
+	user, err := newAdminForm("user-create")
+	if err != nil {
+		t.Fatal(err)
+	}
+	user.Fields[0].Value = "alice"
+	user.Fields[1].Value = "secret"
+	user.Fields[6].Value = "-2"
+	if _, err := buildAdminOperation("/etc/soju/config", user); err == nil {
+		t.Fatal("invalid max-networks was accepted")
+	}
+
+	network, err := newAdminForm("network-create")
+	if err != nil {
+		t.Fatal(err)
+	}
+	network.Fields[0].Value = "alice"
+	network.Fields[1].Value = "ircs://irc.example.test:6697"
+	network.Fields[7].Value = "not-a-fingerprint"
+	if _, err := buildAdminOperation("/etc/soju/config", network); err == nil {
+		t.Fatal("invalid server TLS fingerprint was accepted")
+	}
+
+	channel, err := newAdminForm("channel-create")
+	if err != nil {
+		t.Fatal(err)
+	}
+	channel.Fields[0].Value = "alice"
+	channel.Fields[1].Value = "libera"
+	channel.Fields[2].Value = "#chat"
+	channel.Fields[6].Value = "-1m"
+	if _, err := buildAdminOperation("/etc/soju/config", channel); err == nil {
+		t.Fatal("negative detach duration was accepted")
+	}
+}
+
+func TestDeviceCertificateFingerprintValidation(t *testing.T) {
+	form, err := newAdminForm("device-cert-create")
+	if err != nil {
+		t.Fatal(err)
+	}
+	form.Fields[0].Value = "alice"
+	form.Fields[1].Value = strings.Repeat("AA", 64)
+	form.Fields[2].Value = "laptop"
+	op, err := buildAdminOperation("/etc/soju/config", form)
+	if err != nil {
+		t.Fatalf("valid SHA-512 fingerprint rejected: %v", err)
+	}
+	if op.ConfirmPhrase != "REGISTER DEVICE CERTIFICATE" {
+		t.Fatalf("device registration confirmation = %q", op.ConfirmPhrase)
+	}
+	form.Fields[1].Value = strings.Repeat("AA", 32)
+	if _, err := buildAdminOperation("/etc/soju/config", form); err == nil {
+		t.Fatal("SHA-256 device registration fingerprint was accepted")
+	}
+
+	deleteForm, err := newAdminForm("device-cert-delete")
+	if err != nil {
+		t.Fatal(err)
+	}
+	deleteForm.Fields[0].Value = "alice"
+	deleteForm.Fields[1].Value = strings.Repeat("AA", 10)
+	if _, err := buildAdminOperation("/etc/soju/config", deleteForm); err != nil {
+		t.Fatalf("valid device fingerprint prefix rejected: %v", err)
+	}
+}
+
+func TestNetworkRejectsUnsafeAdditionalConnectCommands(t *testing.T) {
+	form, err := newAdminForm("network-create")
+	if err != nil {
+		t.Fatal(err)
+	}
+	form.Fields[0].Value = "alice"
+	form.Fields[1].Value = "ircs://irc.example.test:6697"
+	for _, invalid := range []string{`not-json`, `["JOIN #ok","PRIVMSG x :bad\nline"]`} {
+		form.Fields[12].Value = invalid
+		if _, err := buildAdminOperation("/etc/soju/config", form); err == nil {
+			t.Fatalf("additional connect commands %q were accepted", invalid)
+		}
+	}
+}
+
+func TestChannelStatusCanListAllNetworks(t *testing.T) {
+	form, err := newAdminForm("channel-status")
+	if err != nil {
+		t.Fatal(err)
+	}
+	form.Fields[0].Value = "alice"
+	op, err := buildAdminOperation("/etc/soju/config", form)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if containsArg(op.Args, "-network") {
+		t.Fatalf("blank network unexpectedly added a filter: %#v", op.Args)
+	}
+}
+
+func TestSpecificUserStatusAndIdentityUpdate(t *testing.T) {
+	status, err := newAdminForm("user-status-specific")
+	if err != nil {
+		t.Fatal(err)
+	}
+	status.Fields[0].Value = "alice"
+	op, err := buildAdminOperation("/etc/soju/config", status)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := strings.Join(op.Args, " "); got != "user status alice" || op.Mutating {
+		t.Fatalf("specific user status = %#v", op)
+	}
+
+	identity, err := newAdminForm("user-identity-update")
+	if err != nil {
+		t.Fatal(err)
+	}
+	identity.Fields[0].Value = "alice"
+	if _, err := buildAdminOperation("/etc/soju/config", identity); err == nil {
+		t.Fatal("empty identity update was accepted")
+	}
+	identity.Fields[1].Value = "alice_"
+	op, err = buildAdminOperation("/etc/soju/config", identity)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := strings.Join(op.Args, " "); got != "user run alice user update -nick alice_" {
+		t.Fatalf("identity update args = %q", got)
+	}
+	identity.Fields[1].Value = ""
+	identity.Fields[3].Value = "nickname"
+	op, err = buildAdminOperation("/etc/soju/config", identity)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := strings.Join(op.Args, "\x00"); !strings.Contains(got, "-nick\x00") || op.ConfirmPhrase != "CLEAR USER IDENTITY SETTING" {
+		t.Fatalf("identity clear = %#v", op)
+	}
+}
+
 func TestNetworkUpdatePrefillSubmitsOnlyChanges(t *testing.T) {
 	form := newNetworkUpdateForm("alice", NetworkStatus{Name: "libera", Address: "ircs://irc.libera.chat:6697"})
 	form.Fields[4].Value = "alice_"
@@ -245,7 +573,7 @@ func TestNetworkUpdatePrefillSubmitsOnlyChanges(t *testing.T) {
 
 func TestNetworkUpdateRejectsNoChangesAndTargetChange(t *testing.T) {
 	form := newNetworkUpdateForm("alice", NetworkStatus{Name: "libera", Address: "ircs://irc.libera.chat:6697"})
-	if _, err := buildAdminOperation("/etc/soju/config", form); err == nil || !strings.Contains(err.Error(), "No network settings changed") {
+	if _, err := buildAdminOperation("/etc/soju/config", form); err == nil || !strings.Contains(err.Error(), "no network settings changed") {
 		t.Fatalf("expected no-change error, got %v", err)
 	}
 	form.Fields[1].Value = "other"

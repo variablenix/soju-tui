@@ -49,6 +49,8 @@ type AdminOperation struct {
 	CapabilityUser        string
 	FormKind              string
 	Quiet                 bool
+	CertificateState      string
+	CertificateReport     string
 }
 
 type AdminConfirmation struct {
@@ -252,7 +254,9 @@ func (a *App) processResult(result adminResult) {
 			a.admin.Output = trimOutput(a.admin.Output)
 			return
 		}
-		if result.Err == nil {
+		if result.Err == nil && isCertificateFingerprintReport(output) {
+			planned.CertificateState = "existing"
+			planned.CertificateReport = normalizeCertificateReport(output)
 			a.admin.Output = append(a.admin.Output,
 				"EXISTING UPSTREAM SASL CERTIFICATE FOUND",
 				strings.TrimSpace(output),
@@ -266,6 +270,8 @@ func (a *App) processResult(result adminResult) {
 			return
 		}
 		if isCertFPNotConfigured(output) {
+			planned.CertificateState = "absent"
+			planned.CertificateReport = ""
 			a.admin.Output = append(a.admin.Output,
 				"No existing upstream SASL CertFP certificate was found for this user and network.",
 				"Generation affects only upstream IRC authentication. The Soju host TLS/Let's Encrypt files are not touched.",
@@ -277,12 +283,45 @@ func (a *App) processResult(result adminResult) {
 			a.admin.Output = trimOutput(a.admin.Output)
 			return
 		}
-		a.admin.Output = append(a.admin.Output, "ERROR: could not safely inspect the existing upstream certificate: "+redactText(result.Err.Error(), result.Operation.Secrets))
+		errorText := "unexpected fingerprint response"
+		if result.Err != nil {
+			errorText = redactText(result.Err.Error(), result.Operation.Secrets)
+		}
+		a.admin.Output = append(a.admin.Output, "ERROR: could not safely inspect the existing upstream certificate: "+errorText)
 		if strings.TrimSpace(output) != "" {
 			a.admin.Output = append(a.admin.Output, strings.TrimSpace(output))
 		}
 		a.setStatusLocked("certificate generation blocked because preflight failed", 0)
 		a.admin.Output = trimOutput(a.admin.Output)
+		return
+	}
+	if result.Operation.FollowUpKind == "cert-generate-guard" {
+		planned := a.admin.PendingOperation
+		a.admin.PendingOperation = nil
+		if planned == nil {
+			a.admin.Output = append(a.admin.Output, "ERROR: certificate generation safety check lost its pending operation")
+			a.setStatusLocked("certificate generation cancelled safely", 0)
+			a.admin.Output = trimOutput(a.admin.Output)
+			return
+		}
+		if !certificateStateMatches(*planned, output, result.Err) {
+			a.admin.Output = append(a.admin.Output,
+				"ERROR: upstream CertFP state changed after it was reviewed; generation was blocked.",
+				"Reopen the action to inspect the current certificate state before trying again.",
+			)
+			if strings.TrimSpace(output) != "" {
+				a.admin.Output = append(a.admin.Output, strings.TrimSpace(output))
+			}
+			a.setStatusLocked("certificate generation blocked because state changed", 0)
+			a.admin.Output = trimOutput(a.admin.Output)
+			return
+		}
+		planned.CertificateState = ""
+		planned.CertificateReport = ""
+		a.mu.Unlock()
+		a.requestOperation(*planned)
+		a.mu.Lock()
+		a.setStatusLocked("certificate state revalidated; running confirmed generation...", 0)
 		return
 	}
 	if result.Err != nil {
@@ -333,6 +372,25 @@ func (a *App) processResult(result adminResult) {
 		a.setStatusLocked("operation completed", 4*time.Second)
 	}
 	a.admin.Output = trimOutput(a.admin.Output)
+}
+
+func normalizeCertificateReport(output string) string {
+	lines := strings.Split(strings.TrimSpace(output), "\n")
+	for index := range lines {
+		lines[index] = strings.TrimSpace(lines[index])
+	}
+	return strings.Join(lines, "\n")
+}
+
+func certificateStateMatches(operation AdminOperation, output string, err error) bool {
+	switch operation.CertificateState {
+	case "existing":
+		return err == nil && isCertificateFingerprintReport(output) && normalizeCertificateReport(output) == operation.CertificateReport
+	case "absent":
+		return err != nil && isCertFPNotConfigured(output)
+	default:
+		return false
+	}
 }
 
 func (a *App) serverStatusOperation() AdminOperation {

@@ -86,6 +86,7 @@ func regularFileExists(path string) (bool, error) {
 	if path == "" {
 		return false, nil
 	}
+	// #nosec G703 -- the local operator explicitly selected this profile path.
 	info, err := os.Stat(path)
 	if errors.Is(err, os.ErrNotExist) {
 		return false, nil
