@@ -14,6 +14,7 @@ var (
 	styleNormal  = tcell.StyleDefault.Foreground(tcell.ColorWhite)
 	styleMuted   = tcell.StyleDefault.Foreground(tcell.ColorGray)
 	styleAccent  = tcell.StyleDefault.Foreground(tcell.ColorLightCyan).Bold(true)
+	styleInfo    = tcell.StyleDefault.Foreground(tcell.ColorLightSkyBlue)
 	styleError   = tcell.StyleDefault.Foreground(tcell.ColorLightCoral)
 	styleInput   = tcell.StyleDefault.Foreground(tcell.ColorWhite).Background(tcell.ColorDarkBlue)
 )
