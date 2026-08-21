@@ -12,7 +12,17 @@ import (
 	"time"
 )
 
-var version = "dev"
+var (
+	version  = "dev"
+	revision = "unknown"
+)
+
+func versionString() string {
+	if revision == "" || revision == "unknown" {
+		return version
+	}
+	return fmt.Sprintf("%s (%s)", version, revision)
+}
 
 func main() {
 	configFlag := flag.String("config", os.Getenv("SOJU_CONFIG"), "soju config path (contains the unix+admin:// listener)")
@@ -25,7 +35,7 @@ func main() {
 	flag.Parse()
 
 	if *versionFlag {
-		fmt.Println(version)
+		fmt.Println(versionString())
 		return
 	}
 
