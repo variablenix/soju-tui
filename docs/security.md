@@ -20,11 +20,25 @@ Read-only actions execute directly. Every mutation has a review screen;
 destructive and high-risk changes require an exact typed phrase. Exiting also
 requires confirmation, including while an operation is running.
 
+Changing a network from SASL EXTERNAL/CertFP to SASL PLAIN requires the exact
+phrase `SET SASL PLAIN`. Resetting and erasing all saved SASL credentials uses
+the separate `RESET SASL` phrase.
+
+Privilege grants, server TLS pin changes, connect commands, client-device trust,
+server-wide notices, limit overrides, and explicit clears also use typed
+phrases. Lower-risk creates and edits still require a `y` confirmation after
+the redacted argument preview.
+
 ## Secrets
 
 The saved profile contains only config and executable paths and is created with
 mode `0600`. Passwords are held only for the operation that needs them and are
 redacted from previews and captured output.
+
+Network connect commands and raw network commands are redacted in their
+entirety because operators commonly use them for NickServ credentials. They
+remain single argument-vector values and require high-risk confirmation before
+execution.
 
 `sojuctl` accepts some secrets as command arguments. They can therefore be
 briefly visible to same-host process inspection while the process runs. Protect
@@ -35,8 +49,9 @@ the configured private-key path for clarity but never opens that file.
 
 Upstream CertFP generation is a separate per-user, per-network operation. The
 TUI performs a read-only fingerprint preflight first. Existing fingerprints are
-shown before replacement, and any unexpected preflight error blocks generation
-instead of guessing that no certificate exists.
+shown before replacement. The state is checked again after typed confirmation;
+a concurrent change or any unexpected preflight error blocks generation instead
+of guessing that no certificate exists.
 
 ## Scope
 

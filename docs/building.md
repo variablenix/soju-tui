@@ -28,6 +28,8 @@ To fast-forward from Git before building:
 
 The helper prints each phase and defaults to `GOTOOLCHAIN=local`. Set
 `GOTOOLCHAIN=auto` explicitly if automatic toolchain downloads are acceptable.
+If the local toolchain is below the version required by `go.mod`, the helper
+stops before tests or builds and prints that exact opt-in command.
 
 ## Versions
 

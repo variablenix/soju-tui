@@ -25,6 +25,8 @@ type SojuConfigInfo struct {
 }
 
 func readSojuConfig(path string) (SojuConfigInfo, error) {
+	// #nosec G304,G703 -- the local operator explicitly selects the Soju config;
+	// reading any file already readable by that same account crosses no boundary.
 	file, err := os.Open(path)
 	if err != nil {
 		return SojuConfigInfo{}, fmt.Errorf("read soju config %s: %w", path, err)
