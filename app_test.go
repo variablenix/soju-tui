@@ -77,7 +77,7 @@ func TestPermissionDeniedHint(t *testing.T) {
 	output := "dial /run/soju/admin: dial unix /run/soju/admin: connect: permission denied\n"
 	hint := sojuCtlFailureHint(output)
 	if !strings.Contains(hint, "ADMIN SOCKET ACCESS DENIED") ||
-		!strings.Contains(hint, "scripts/grant-admin-access.sh") ||
+		!strings.Contains(hint, "scripts/setup.sh") ||
 		!strings.Contains(hint, "/run/soju/admin") {
 		t.Fatalf("unexpected permission hint: %q", hint)
 	}
