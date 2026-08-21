@@ -24,6 +24,12 @@ To fast-forward the checkout and then verify/build it:
 
 The script runs `go test ./...`, `go vet ./...`, downloads modules, and writes binaries under `dist/`. It never performs a non-fast-forward Git update.
 
+The helper prints each verification/build phase and defaults to
+`GOTOOLCHAIN=local`, so an installed Go version older than the required Go
+1.23 fails clearly instead of silently downloading another toolchain. Check
+the installed version with `go version`; use `GOTOOLCHAIN=auto` explicitly if
+automatic toolchain downloads are desired.
+
 The Makefile remains available:
 
 ```sh

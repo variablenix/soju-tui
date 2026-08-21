@@ -7,6 +7,16 @@ cd "$ROOT_DIR"
 TARGET=${TARGET:-linux-amd64}
 VERSION=${VERSION:-dev}
 PULL=0
+GO_BIN=${GO_BIN:-go}
+GO_TOOLCHAIN=${GOTOOLCHAIN:-local}
+
+log() {
+	printf '[soju-tui] %s\n' "$1"
+}
+
+go_cmd() {
+	GOTOOLCHAIN="$GO_TOOLCHAIN" "$GO_BIN" "$@"
+}
 
 usage() {
 	cat <<'EOF'
@@ -51,29 +61,37 @@ while [ "$#" -gt 0 ]; do
 done
 
 if [ "$PULL" -eq 1 ]; then
+	log "pulling latest changes with fast-forward-only git pull"
 	git pull --ff-only
 fi
 
-command -v go >/dev/null 2>&1 || { echo "Go is required to build soju-tui" >&2; exit 1; }
+command -v "$GO_BIN" >/dev/null 2>&1 || { echo "Go is required to build soju-tui" >&2; exit 1; }
 
-go mod download
-go test ./...
-go vet ./...
+log "using $($GO_BIN version)"
+log "toolchain policy: GOTOOLCHAIN=$GO_TOOLCHAIN"
+
+log "downloading Go modules"
+go_cmd mod download
+log "running tests"
+go_cmd test ./...
+log "running go vet"
+go_cmd vet ./...
 
 mkdir -p dist
 LDFLAGS="-s -w -X main.version=$VERSION"
 
 build_target() {
 	target=$1
+	log "building $target version $VERSION"
 	case "$target" in
 		host)
-		go build -trimpath -ldflags "$LDFLAGS" -o "dist/soju-tui" .
+		go_cmd build -trimpath -ldflags "$LDFLAGS" -o "dist/soju-tui" .
 		;;
 		linux-amd64)
-		CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath -ldflags "$LDFLAGS" -o "dist/soju-tui-linux-amd64" .
+		CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go_cmd build -trimpath -ldflags "$LDFLAGS" -o "dist/soju-tui-linux-amd64" .
 		;;
 		linux-arm64)
-		CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -trimpath -ldflags "$LDFLAGS" -o "dist/soju-tui-linux-arm64" .
+		CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go_cmd build -trimpath -ldflags "$LDFLAGS" -o "dist/soju-tui-linux-arm64" .
 		;;
 		*)
 			echo "unknown target: $target" >&2
