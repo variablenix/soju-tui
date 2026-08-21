@@ -58,6 +58,10 @@ func isUserStatusArgs(args []string) bool {
 	return len(args) == 2 && args[0] == "user" && args[1] == "status"
 }
 
+func isCertFPNotConfigured(output string) bool {
+	return strings.Contains(strings.ToLower(output), "certfp not set up")
+}
+
 func (a *App) adminMenuItemsLocked() []AdminMenuItem {
 	items := adminMenuItems()
 	if !a.admin.Capabilities.Known {
@@ -65,6 +69,9 @@ func (a *App) adminMenuItemsLocked() []AdminMenuItem {
 	}
 	filtered := make([]AdminMenuItem, 0, len(items))
 	for _, item := range items {
+		if item.Kind == "cert-generate" && !a.admin.Capabilities.Commands["certfp fingerprint"] {
+			continue
+		}
 		if item.Command == "" || a.admin.Capabilities.Commands[item.Command] {
 			filtered = append(filtered, item)
 		}
@@ -91,7 +98,7 @@ func adminMenuItems() []AdminMenuItem {
 		{Label: "Create channel for user", Kind: "channel-create", Command: "channel create"},
 		{Label: "Update channel for user", Kind: "channel-update", Command: "channel update"},
 		{Label: "Delete channel for user", Kind: "channel-delete", Command: "channel delete"},
-		{Label: "Generate upstream SASL certificate", Kind: "cert-generate", Command: "certfp generate"},
+		{Label: "Generate upstream IRC CertFP (self-signed)", Kind: "cert-generate", Command: "certfp generate"},
 		{Label: "Show upstream CertFP fingerprints", Kind: "cert-fingerprint", Command: "certfp fingerprint"},
 		{Label: "Show SASL status", Kind: "sasl-status", Command: "sasl status"},
 		{Label: "Set SASL PLAIN", Kind: "sasl-set-plain", Command: "sasl set-plain"},
@@ -409,7 +416,7 @@ func newAdminForm(kind string) (*AdminForm, error) {
 		}
 		return &AdminForm{Kind: kind, Title: map[string]string{"channel-delete": "Delete channel for user", "channel-status": "Show channels for user"}[kind], Fields: fields}, nil
 	case "cert-generate":
-		return &AdminForm{Kind: kind, Title: "Generate upstream SASL certificate", Fields: []AdminField{userTarget, networkTarget, selectField("Key type", "replaces the network's SASL EXTERNAL key: rsa, ecdsa, ed25519", "rsa", "ecdsa", "ed25519"), field("RSA bits", "3072", false, false, "text", "ignored for ecdsa/ed25519")}}, nil
+		return &AdminForm{Kind: kind, Title: "Generate self-signed upstream IRC CertFP (host TLS is untouched)", Fields: []AdminField{userTarget, networkTarget, selectField("Key type", "replaces only this network's SASL EXTERNAL key: rsa, ecdsa, ed25519", "rsa", "ecdsa", "ed25519"), field("RSA bits", "3072", false, false, "text", "ignored for ecdsa/ed25519")}}, nil
 	case "cert-fingerprint":
 		return &AdminForm{Kind: kind, Title: "Show upstream CertFP fingerprints", Fields: []AdminField{userTarget, networkTarget}}, nil
 	case "sasl-status":
@@ -531,6 +538,23 @@ func (a *App) adminSubmitFormLocked() {
 		return
 	}
 	a.admin.Form = nil
+	if form.Kind == "cert-generate" {
+		if len(op.Preflight) == 0 {
+			a.admin.Output = append(a.admin.Output, "ERROR: certificate generation has no safe preflight command")
+			a.admin.View = adminOutput
+			a.setStatusLocked("certificate generation cancelled safely", 0)
+			return
+		}
+		a.admin.PendingOperation = &op
+		probe := makeAdminOperation(a.backend.Config, "Check existing upstream SASL certificate", op.Preflight, nil, false, nil)
+		probe.FollowUpKind = "cert-generate-preflight"
+		probe.Quiet = true
+		a.mu.Unlock()
+		a.requestOperation(probe)
+		a.mu.Lock()
+		a.setStatusLocked("checking for an existing upstream CertFP before generation...", 0)
+		return
+	}
 	if op.Mutating {
 		a.admin.Confirm = &AdminConfirmation{Operation: op}
 		a.admin.View = adminOutput
@@ -665,6 +689,7 @@ func buildAdminOperation(config string, form *AdminForm) (AdminOperation, error)
 
 	mutating := true
 	refresh := []string{"server", "status"}
+	var preflight []string
 	secrets := []string{}
 	var args []string
 	summary := form.Title
@@ -776,6 +801,7 @@ func buildAdminOperation(config string, form *AdminForm) (AdminOperation, error)
 		refresh = args
 	case "cert-generate":
 		args = userRun(values["User"], "certfp", "generate", "-network", values["Network"])
+		preflight = userRun(values["User"], "certfp", "fingerprint", "-network", values["Network"])
 		if values["Key type"] != "" && values["Key type"] != "rsa" {
 			args = append(args, "-key-type", values["Key type"])
 		}
@@ -836,6 +862,7 @@ func buildAdminOperation(config string, form *AdminForm) (AdminOperation, error)
 		summary += " / channel " + values["Channel"]
 	}
 	op := makeAdminOperation(config, summary, args, refresh, mutating, secrets)
+	op.Preflight = append([]string(nil), preflight...)
 	switch form.Kind {
 	case "network-update-lookup":
 		op.FollowUpKind = "network-update"
@@ -850,7 +877,7 @@ func buildAdminOperation(config string, form *AdminForm) (AdminOperation, error)
 	case "channel-delete":
 		op.ConfirmPhrase = "DELETE CHANNEL " + values["Channel"]
 	case "cert-generate":
-		op.ConfirmPhrase = "REPLACE CERTIFICATE"
+		op.ConfirmPhrase = "GENERATE OR REPLACE UPSTREAM CERTIFICATE"
 	case "sasl-reset":
 		op.ConfirmPhrase = "RESET SASL"
 	case "device-cert-delete":
