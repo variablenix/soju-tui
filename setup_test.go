@@ -1,6 +1,8 @@
 package main
 
 import (
+	"crypto/sha256"
+	"fmt"
 	"net"
 	"os"
 	"os/exec"
@@ -131,7 +133,7 @@ func TestSetupWizardDryRunDiscoversUserAndSocket(t *testing.T) {
 		"TUI build:           test-build (abc123)",
 		"Replace the existing regular file at " + installPath + " now?",
 		"Installed command: " + installPath,
-		"Verified installed fingerprint:",
+		"Verified installed SHA-256:",
 	} {
 		if !strings.Contains(string(output), expected) {
 			t.Fatalf("setup replacement output missing %q:\n%s", expected, output)
@@ -157,6 +159,74 @@ func TestSetupWizardDryRunDiscoversUserAndSocket(t *testing.T) {
 	output, err = command.CombinedOutput()
 	if err != nil || !strings.Contains(string(output), "Installed command:   disabled (--no-install)") {
 		t.Fatalf("setup --no-install dry run failed: %v\n%s", err, output)
+	}
+
+	badManifest := filepath.Join(temporaryDir, "SHA256SUMS.bad")
+	if err := os.WriteFile(badManifest, []byte(strings.Repeat("0", 64)+"  soju-tui\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	command = exec.Command(setupPath,
+		"--user", "testadmin",
+		"--config", configPath,
+		"--sojuctl", filepath.Join(stubDir, "sojuctl"),
+		"--binary", tuiBinary,
+		"--checksums", badManifest,
+		"--no-install",
+		"--dry-run",
+	)
+	command.Env = append(os.Environ(), "PATH="+stubDir+":"+os.Getenv("PATH"))
+	output, err = command.CombinedOutput()
+	if err == nil || !strings.Contains(string(output), "does not match "+badManifest) {
+		t.Fatalf("setup accepted a checksum mismatch: %v\n%s", err, output)
+	}
+	goodManifest := filepath.Join(temporaryDir, "SHA256SUMS")
+	digest := sha256.Sum256([]byte(sourceContents))
+	if err := os.WriteFile(goodManifest, []byte(fmt.Sprintf("%x  soju-tui\n", digest)), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	command = exec.Command(setupPath,
+		"--user", "testadmin",
+		"--config", configPath,
+		"--sojuctl", filepath.Join(stubDir, "sojuctl"),
+		"--binary", tuiBinary,
+		"--checksums", goodManifest,
+		"--no-install",
+		"--dry-run",
+	)
+	command.Env = append(os.Environ(), "PATH="+stubDir+":"+os.Getenv("PATH"))
+	output, err = command.CombinedOutput()
+	if err != nil || !strings.Contains(string(output), "Checksums manifest:  "+goodManifest) {
+		t.Fatalf("setup rejected a valid checksum manifest: %v\n%s", err, output)
+	}
+
+	devBinary := filepath.Join(temporaryDir, "soju-tui-dev")
+	writeExecutable(t, devBinary, "#!/bin/sh\nif [ \"${1:-}\" = -version ]; then echo '0.2.2-dev (abc123-dirty)'; fi\nexit 0\n")
+	command = exec.Command(setupPath,
+		"--user", "testadmin",
+		"--config", configPath,
+		"--sojuctl", filepath.Join(stubDir, "sojuctl"),
+		"--binary", devBinary,
+		"--no-install",
+		"--dry-run",
+	)
+	command.Env = append(os.Environ(), "PATH="+stubDir+":"+os.Getenv("PATH"))
+	output, err = command.CombinedOutput()
+	if err == nil || !strings.Contains(string(output), "development or unverifiable build") {
+		t.Fatalf("setup accepted a development build without opt-in: %v\n%s", err, output)
+	}
+	command = exec.Command(setupPath,
+		"--user", "testadmin",
+		"--config", configPath,
+		"--sojuctl", filepath.Join(stubDir, "sojuctl"),
+		"--binary", devBinary,
+		"--no-install",
+		"--dry-run",
+		"--allow-development-build",
+	)
+	command.Env = append(os.Environ(), "PATH="+stubDir+":"+os.Getenv("PATH"))
+	output, err = command.CombinedOutput()
+	if err != nil || !strings.Contains(string(output), "0.2.2-dev (abc123-dirty)") {
+		t.Fatalf("setup rejected an explicitly allowed development build: %v\n%s", err, output)
 	}
 
 	symlinkPath := filepath.Join(temporaryDir, "linked-command")

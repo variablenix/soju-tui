@@ -13,6 +13,9 @@ INSTALL_PATH=/usr/local/bin/soju-tui
 INSTALL_BINARY=1
 DRY_RUN=0
 ASSUME_YES=0
+CHECKSUMS_PATH=
+ALLOW_DEVELOPMENT_BUILD=0
+DEFAULT_BINARY=0
 
 usage() {
 	cat <<'EOF'
@@ -29,7 +32,10 @@ Options:
   --socket PATH     Override the admin socket discovered from the config
   --sojuctl PATH    Override the sojuctl executable
   --binary PATH     Override the architecture-matched source binary
+  --checksums PATH  SHA256SUMS manifest for the selected binary
   --install-path P  Command path (default: /usr/local/bin/soju-tui)
+  --allow-development-build
+                    Permit a dev/dirty/unknown build (not for production)
   --no-install      Configure socket access without installing the command
   --dry-run         Show detected settings and proposed changes only
   --yes             Accept package, replacement, and ACL confirmation prompts
@@ -86,6 +92,11 @@ while [ "$#" -gt 0 ]; do
 		TUI_BINARY=$2
 		shift 2
 		;;
+	--checksums)
+		[ "$#" -ge 2 ] || fail "--checksums requires a value"
+		CHECKSUMS_PATH=$2
+		shift 2
+		;;
 	--install-path)
 		[ "$#" -ge 2 ] || fail "--install-path requires a value"
 		INSTALL_PATH=$2
@@ -101,6 +112,10 @@ while [ "$#" -gt 0 ]; do
 		;;
 	--yes)
 		ASSUME_YES=1
+		shift
+		;;
+	--allow-development-build)
+		ALLOW_DEVELOPMENT_BUILD=1
 		shift
 		;;
 	-h | --help)
@@ -157,6 +172,7 @@ esac
 [ -x "$GRANT_SCRIPT" ] || fail "$GRANT_SCRIPT is missing or not executable"
 
 if [ -z "$TUI_BINARY" ]; then
+	DEFAULT_BINARY=1
 	case "$(uname -m)" in
 	x86_64 | amd64) TUI_BINARY=$ROOT_DIR/dist/soju-tui-linux-amd64 ;;
 	aarch64 | arm64) TUI_BINARY=$ROOT_DIR/dist/soju-tui-linux-arm64 ;;
@@ -171,23 +187,53 @@ esac
 [ ! -L "$TUI_BINARY" ] || fail "refusing a symbolic-link source binary"
 [ -x "$TUI_BINARY" ] || fail "$TUI_BINARY is not executable"
 command -v runuser >/dev/null 2>&1 || fail "runuser is required"
-command -v cksum >/dev/null 2>&1 || fail "cksum is required"
-binary_fingerprint() {
+if command -v sha256sum >/dev/null 2>&1; then
+	SHA256_COMMAND=sha256sum
+elif command -v shasum >/dev/null 2>&1; then
+	SHA256_COMMAND=shasum
+else
+	fail "sha256sum or shasum is required"
+fi
+binary_sha256() {
 	FINGERPRINT_PATH=$1
-	FINGERPRINT=$(cksum <"$FINGERPRINT_PATH") || fail "cannot fingerprint $FINGERPRINT_PATH"
-	FINGERPRINT_CRC=${FINGERPRINT%% *}
-	FINGERPRINT_BYTES=${FINGERPRINT#* }
-	case "$FINGERPRINT_CRC:$FINGERPRINT_BYTES" in
-	*[!0-9:]*) fail "unexpected checksum output for $FINGERPRINT_PATH" ;;
+	if [ "$SHA256_COMMAND" = sha256sum ]; then
+		FINGERPRINT=$(sha256sum "$FINGERPRINT_PATH" | awk '{ print $1 }') || fail "cannot hash $FINGERPRINT_PATH"
+	else
+		FINGERPRINT=$(shasum -a 256 "$FINGERPRINT_PATH" | awk '{ print $1 }') || fail "cannot hash $FINGERPRINT_PATH"
+	fi
+	case "$FINGERPRINT" in
+	????????????????????????????????????????????????????????????????) ;;
+	*) fail "unexpected SHA-256 output for $FINGERPRINT_PATH" ;;
 	esac
-	[ -n "$FINGERPRINT_CRC" ] && [ -n "$FINGERPRINT_BYTES" ] || fail "empty checksum output for $FINGERPRINT_PATH"
-	printf '%s:%s' "$FINGERPRINT_CRC" "$FINGERPRINT_BYTES"
+	case "$FINGERPRINT" in
+	*[!0-9A-Fa-f]*) fail "unexpected SHA-256 output for $FINGERPRINT_PATH" ;;
+	esac
+	printf '%s' "$FINGERPRINT"
 }
 if ! SOURCE_VERSION=$(runuser -u "$TARGET_USER" -- "$TUI_BINARY" -version 2>/dev/null); then
 	fail "$TUI_BINARY cannot run as $TARGET_USER; verify its architecture and permissions"
 fi
 [ -n "$SOURCE_VERSION" ] || fail "$TUI_BINARY returned an empty version"
-SOURCE_FINGERPRINT=$(binary_fingerprint "$TUI_BINARY")
+SOURCE_VERSION_LOWER=$(printf '%s' "$SOURCE_VERSION" | tr '[:upper:]' '[:lower:]')
+if [ "$ALLOW_DEVELOPMENT_BUILD" -ne 1 ]; then
+	case "$SOURCE_VERSION_LOWER" in
+	*dev* | *dirty* | *unknown*) fail "$TUI_BINARY is a development or unverifiable build ($SOURCE_VERSION); rebuild a tagged release or use --allow-development-build for testing" ;;
+	esac
+fi
+SOURCE_SHA256=$(binary_sha256 "$TUI_BINARY")
+
+if [ -z "$CHECKSUMS_PATH" ] && [ "$DEFAULT_BINARY" -eq 1 ]; then
+	CHECKSUMS_PATH=$ROOT_DIR/dist/SHA256SUMS
+fi
+if [ -n "$CHECKSUMS_PATH" ]; then
+	case "$CHECKSUMS_PATH" in
+	/*) ;;
+	*) fail "the checksums path must be absolute" ;;
+	esac
+	[ -f "$CHECKSUMS_PATH" ] && [ ! -L "$CHECKSUMS_PATH" ] || fail "$CHECKSUMS_PATH is missing, not regular, or a symbolic link"
+	EXPECTED_SHA256=$(awk -v name="${TUI_BINARY##*/}" '$2 == name { print $1; found++ } END { if (found != 1) exit 1 }' "$CHECKSUMS_PATH") || fail "$CHECKSUMS_PATH must contain exactly one entry for ${TUI_BINARY##*/}"
+	[ "$EXPECTED_SHA256" = "$SOURCE_SHA256" ] || fail "$TUI_BINARY does not match $CHECKSUMS_PATH"
+fi
 
 INSTALL_STATUS=disabled
 if [ "$INSTALL_BINARY" -eq 1 ]; then
@@ -244,7 +290,8 @@ printf '  Admin socket:        %s\n' "$SOCKET_PATH"
 printf '  sojuctl:             %s\n' "$SOJUCTL_PATH"
 printf '  TUI binary:          %s\n' "$TUI_BINARY"
 printf '  TUI build:           %s\n' "$SOURCE_VERSION"
-printf '  TUI fingerprint:     %s\n' "$SOURCE_FINGERPRINT"
+printf '  TUI SHA-256:         %s\n' "$SOURCE_SHA256"
+printf '  Checksums manifest:  %s\n' "${CHECKSUMS_PATH:-not supplied (custom build)}"
 if [ "$INSTALL_BINARY" -eq 1 ]; then
 	printf '  Installed command:   %s (%s)\n\n' "$INSTALL_PATH" "$INSTALL_STATUS"
 else
@@ -283,9 +330,9 @@ install_tui_binary() {
 		installed_binary_is_current || fail "installed command failed content, ownership, mode, or link-count verification"
 		printf 'Installed command: %s\n' "$INSTALL_PATH"
 	fi
-	INSTALLED_FINGERPRINT=$(binary_fingerprint "$INSTALL_PATH")
-	[ "$INSTALLED_FINGERPRINT" = "$SOURCE_FINGERPRINT" ] || fail "installed command fingerprint does not match the selected source binary"
-	printf 'Verified installed fingerprint: %s\n' "$INSTALLED_FINGERPRINT"
+	INSTALLED_SHA256=$(binary_sha256 "$INSTALL_PATH")
+	[ "$INSTALLED_SHA256" = "$SOURCE_SHA256" ] || fail "installed command SHA-256 does not match the selected source binary"
+	printf 'Verified installed SHA-256: %s\n' "$INSTALLED_SHA256"
 }
 
 install_acl_package() {

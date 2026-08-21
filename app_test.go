@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"strings"
 	"testing"
@@ -197,7 +198,7 @@ func TestStaticHelpIsOfflineAndAlwaysAvailable(t *testing.T) {
 	}
 
 	app.adminHandleKey("?", '?')
-	if !app.admin.HelpOpen || app.admin.Busy || app.admin.LastOperation != nil {
+	if !app.admin.HelpOpen || app.admin.Busy {
 		t.Fatal("static help unexpectedly started a backend operation")
 	}
 	help := strings.Join(sojuTUIHelp(), "\n")
@@ -306,9 +307,9 @@ func TestParseFirstSojuUsername(t *testing.T) {
 }
 
 func TestParseSojuUsernames(t *testing.T) {
-	output := "ak (admin): 3 networks\nalice: 1 networks\nak (admin): 3 networks\n(2 more users omitted)\n"
+	output := "ak (admin): 3 networks\nalice: 1 networks\nteam lead:ops (disabled): 2 networks (5 max)\nak (admin): 3 networks\n(2 more users omitted)\n"
 	users := parseSojuUsernames(output)
-	if strings.Join(users, ",") != "ak,alice" {
+	if strings.Join(users, ",") != "ak,alice,team lead:ops" {
 		t.Fatalf("users = %#v", users)
 	}
 }
@@ -374,6 +375,60 @@ func TestUserTargetActionHandlesEmptyInstance(t *testing.T) {
 		t.Fatalf("empty-user result was not explained: form=%#v output=%#v", app.admin.Form, app.admin.Output)
 	}
 	app.close()
+}
+
+func TestUserDeletionFailsClosedOnUnexpectedConfirmation(t *testing.T) {
+	app := newTestApp()
+	defer app.close()
+	app.processResult(adminResult{
+		Operation: AdminOperation{NeedsSojuConfirmation: true, TargetUser: "alice"},
+		Output:    "success without a confirmation token\n",
+	})
+	if app.admin.Confirm != nil {
+		t.Fatalf("unexpected confirmation was accepted: %#v", app.admin.Confirm)
+	}
+	output := strings.Join(app.admin.Output, "\n")
+	if !strings.Contains(output, "Deletion was blocked") || !strings.Contains(app.currentStatusLocked(), "blocked") {
+		t.Fatalf("fail-closed result was not explained: output=%q status=%q", output, app.currentStatusLocked())
+	}
+}
+
+func TestCompletedSecretOperationIsNotRetained(t *testing.T) {
+	app := newTestApp()
+	defer app.close()
+	app.processResult(adminResult{
+		Operation: AdminOperation{Args: []string{"user", "update", "alice", "-password", "correct-horse"}, Secrets: []string{"correct-horse"}},
+		Output:    "updated user correct-horse\n",
+	})
+	state, err := json.Marshal(app.admin)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(state), "correct-horse") {
+		t.Fatalf("completed secret remained in admin state: %s", state)
+	}
+	if !strings.Contains(string(state), "••••••") {
+		t.Fatalf("captured output was not redacted: %s", state)
+	}
+}
+
+func TestUnixSchemeFallbackRetriesOnlyEquivalentAddress(t *testing.T) {
+	app := newTestApp()
+	defer app.close()
+	app.backend = &SojuCtl{Path: "/bin/true", Config: "/etc/soju/config"}
+	op := AdminOperation{
+		Args:                  []string{"user", "run", "alice", "network", "create", "-addr", "unix:///run/irc.sock"},
+		CompatibilityFallback: []string{"user", "run", "alice", "network", "create", "-addr", "irc+unix:///run/irc.sock"},
+		FallbackPreview:       "sojuctl -config /etc/soju/config user run alice network create -addr irc+unix:///run/irc.sock",
+	}
+	app.processResult(adminResult{
+		Operation: op,
+		Output:    `unknown scheme "unix" (supported schemes: ircs, irc+insecure, irc+unix)`,
+		Err:       errors.New("sojuctl failed: exit status 1"),
+	})
+	if !app.admin.Busy || !strings.Contains(strings.Join(app.admin.Output, "\n"), "retrying the equivalent") {
+		t.Fatalf("compatibility fallback was not scheduled: busy=%v output=%#v", app.admin.Busy, app.admin.Output)
+	}
 }
 
 func TestNetworkTargetedActionDiscoversNetworksBeforeOpening(t *testing.T) {

@@ -18,6 +18,14 @@ is never trusted as current. Updates use a temporary file in the destination
 directory followed by an atomic rename, and replacing an existing file requires
 confirmation.
 
+Production setup rejects development, dirty, and unknown builds. It verifies
+repository artifacts against `dist/SHA256SUMS`, compares the installed copy by
+SHA-256 after atomic replacement, and records release revision/toolchain data in
+`dist/BUILDINFO`. Checksums detect corruption; release authenticity still
+depends on the trusted Gitea transport, exact release tag, and GitHub
+mirror/release access controls. A GitHub Actions result validates a mirrored
+commit after it arrives; it does not gate the authoritative Gitea push.
+
 ## Command execution
 
 Every operation uses an argument vector with `exec.CommandContext`. User input
@@ -56,8 +64,8 @@ execution.
 briefly visible to same-host process inspection while the process runs. Protect
 the host, admin socket, and administrator account accordingly.
 
-The host certificate viewer reads only the public certificate file. It reports
-the configured private-key path for clarity but never opens that file.
+The host certificate viewer reads only an absolute public-certificate path. It
+reports the configured private-key path for clarity but never opens that file.
 
 Upstream CertFP generation is a separate per-user, per-network operation. The
 TUI performs a read-only fingerprint preflight first. Existing fingerprints are

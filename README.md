@@ -16,6 +16,8 @@ it is not an IRC chat client and never opens channels or displays messages.
 - Inspect upstream CertFP fingerprints for one network or every saved network
   in a grouped, colorized view.
 - Show only commands supported by the running Soju version.
+- Verify release artifacts with SHA-256, embed the exact Git revision, and test
+  the command contract against real Soju v0.9.0 and v0.10.1 instances in CI.
 - Preview every mutation as a redacted `sojuctl` command before confirmation.
 - Open built-in, offline help with `?`, `F1`, or the help menu item.
 - Use a responsive Soju-TUI bottle wordmark without crowding command output.
@@ -39,6 +41,11 @@ Preview and run the guided setup from the repository:
 ./scripts/setup.sh --dry-run
 ./scripts/setup.sh
 ```
+
+The production setup accepts a numbered, verifiable build. Development builds
+are intentionally rejected unless `--allow-development-build` is supplied for
+local testing. On the development branch, use the same option with both the
+dry run and apply command after reviewing the displayed build and SHA-256.
 
 The wizard installs the matching binary as `/usr/local/bin/soju-tui`. Run it as
 the regular local user authorized by the wizard:
@@ -65,16 +72,21 @@ configure admin-socket permissions with their native service manager.
   and first launch
 - [Using the TUI](docs/usage.md) — user selection, controls, operations, and
   certificate types
+- [Soju compatibility](docs/compatibility.md) — v0.9.0/v0.10.1 support,
+  capability detection, and the Unix-network spelling difference
 - [Soju command reference](docs/command-reference.md) — verified `sojuctl`
   syntax and corrections for common invalid forms
 - [Certificate safety](docs/certificates.md) — Let's Encrypt host TLS, upstream
   CertFP preflight, and downstream device certificates
 - [Building and releases](docs/building.md) — helper script, targets, versions,
   and verification
+- [GitHub mirror and checks](docs/github-mirror.md) — GitHub Actions,
+  Dependabot, mirror topology, and the `main` ruleset
 - [Security model](docs/security.md) — socket access, confirmations, secrets,
   and trust boundaries
 - [Troubleshooting](docs/troubleshooting.md) — permissions, binaries, config,
   capability detection, and common failures
+- [MIT license](LICENSE)
 
 ## Safety model
 
@@ -90,3 +102,7 @@ The implementation follows Soju's documented administration interfaces:
 
 - [sojuctl manual](https://soju.im/doc/sojuctl.1.html)
 - [soju configuration and IRC service manual](https://soju.im/doc/soju.1.html)
+
+The command contract is explicitly regression-tested against upstream Soju
+v0.9.0 and v0.10.1, including Debian's `0.9.0-1` and `0.10.1-1` packaging. See
+[Soju version compatibility](docs/compatibility.md) for the exact boundary.

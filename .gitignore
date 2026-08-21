@@ -3,3 +3,5 @@
 /soju-tui-linux-amd64
 /soju-tui-linux-arm64
 /dist/*
+!/dist/SHA256SUMS
+!/dist/BUILDINFO

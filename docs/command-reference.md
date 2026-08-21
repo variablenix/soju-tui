@@ -27,9 +27,11 @@ sojuctl -config /etc/soju/config user run USER network delete example
 ```
 
 Valid connection schemes are `ircs://`, `irc+insecure://`, and
-`irc+unix:///path`. Current Soju internals also use the equivalent
-`unix:///path`; the TUI normalizes the documented `irc+unix://` spelling before
-calling `sojuctl` to remain compatible with the service-command validator. The
+`irc+unix:///path` in the TUI. Soju v0.9.0 and v0.10.1 require the equivalent
+`unix:///path` spelling in their service-command validator, so the TUI performs
+that stable-release normalization before calling `sojuctl`. If a newer server
+explicitly rejects `unix` and advertises `irc+unix`, the TUI retries only that
+equivalent spelling. The
 network `-certfp` option pins the upstream IRC **server's TLS certificate** and
 current handlers accept a SHA-256 or SHA-512 fingerprint. It is unrelated to
 the SASL CertFP identity certificate below.
@@ -81,7 +83,9 @@ is expected to fail instead of overwriting the existing object.
 
 ## Version compatibility
 
-Available commands depend on the running Soju version. Inspect them with:
+Available commands depend on the running Soju version. Soju-TUI explicitly
+supports v0.9.0 and v0.10.1; their administration command grammar is the same.
+Inspect the active server with:
 
 ```sh
 sojuctl -config /etc/soju/config help
@@ -89,6 +93,7 @@ sojuctl -config /etc/soju/config user run USER help
 ```
 
 The TUI performs the same capability discovery and omits unsupported menu
-actions. Command definitions were audited against Soju's current
-[`service.go`](https://codeberg.org/emersion/soju/src/branch/master/service.go)
-handlers; the running server remains authoritative.
+actions. Command definitions and Debian packaging were audited at both tagged
+releases; the running server remains authoritative. See
+[Soju version compatibility](compatibility.md) for the detailed matrix and
+boundary.

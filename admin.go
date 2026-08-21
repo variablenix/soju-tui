@@ -35,7 +35,7 @@ func parseAdminCommandHelp(help string) map[string]bool {
 	return commands
 }
 
-var sojuUserStatusLine = regexp.MustCompile(`^([^[:space:]:]+)(?: \([^)]*\))?:`)
+var sojuUserStatusSuffix = regexp.MustCompile(`: [0-9]+ networks(?: \(-?[0-9]+ max\))?$`)
 
 func parseFirstSojuUsername(output string) string {
 	users := parseSojuUsernames(output)
@@ -49,10 +49,21 @@ func parseSojuUsernames(output string) []string {
 	users := make([]string, 0)
 	seen := make(map[string]bool)
 	for _, line := range strings.Split(output, "\n") {
-		match := sojuUserStatusLine.FindStringSubmatch(strings.TrimSpace(line))
-		if len(match) == 2 && !seen[match[1]] {
-			users = append(users, match[1])
-			seen[match[1]] = true
+		line = strings.TrimSuffix(line, "\r")
+		suffix := sojuUserStatusSuffix.FindStringIndex(line)
+		if suffix == nil {
+			continue
+		}
+		username := line[:suffix[0]]
+		for _, attributes := range []string{" (admin, disabled)", " (disabled, admin)", " (admin)", " (disabled)"} {
+			if strings.HasSuffix(username, attributes) {
+				username = strings.TrimSuffix(username, attributes)
+				break
+			}
+		}
+		if username != "" && !seen[username] {
+			users = append(users, username)
+			seen[username] = true
 		}
 	}
 	return users
@@ -1106,6 +1117,16 @@ func buildAdminOperation(config string, form *AdminForm) (AdminOperation, error)
 		*args = append(*args, flagName, value)
 		return nil
 	}
+	standardBoolArg := func(args *[]string, flagName, value string) error {
+		if value != "true" && value != "false" {
+			return fmt.Errorf("%s must be true or false", flagName)
+		}
+		// Go's standard bool flags treat a bare -flag as true and do not
+		// consume the following argv entry. The =value form is therefore
+		// required when explicitly selecting false (and is unambiguous for true).
+		*args = append(*args, flagName+"="+value)
+		return nil
+	}
 	presenceFlag := func(args *[]string, flagName, value string) error {
 		if value == "" {
 			return nil
@@ -1126,9 +1147,10 @@ func buildAdminOperation(config string, form *AdminForm) (AdminOperation, error)
 		args := []string{}
 		address := values["Address"]
 		if strings.HasPrefix(address, "irc+unix://") {
-			// Current Soju connection code accepts both spellings, while its
-			// service command validator and published manual disagree. The
-			// shorter spelling works through both layers.
+			// Soju v0.9.0 and v0.10.1 service command validators require the
+			// legacy unix:// spelling even though irc+unix:// is the clearer
+			// public form. Normalize at the argv boundary for both supported
+			// stable releases.
 			address = "unix://" + strings.TrimPrefix(address, "irc+unix://")
 		}
 		if create {
@@ -1237,6 +1259,9 @@ func buildAdminOperation(config string, form *AdminForm) (AdminOperation, error)
 		args = []string{"user", "status", values["User"]}
 		refresh = args
 	case "user-create":
+		if err := validateDiscoverableUsername(values["Username"]); err != nil {
+			return AdminOperation{}, err
+		}
 		if _, err := parseMaxNetworks(values["Max networks"]); err != nil {
 			return AdminOperation{}, err
 		}
@@ -1252,7 +1277,7 @@ func buildAdminOperation(config string, form *AdminForm) (AdminOperation, error)
 		}
 		secrets = append(secrets, values["Password"])
 		if values["Admin"] != "false" {
-			if err := boolArg(&args, "-admin", values["Admin"]); err != nil {
+			if err := standardBoolArg(&args, "-admin", values["Admin"]); err != nil {
 				return AdminOperation{}, err
 			}
 		}
@@ -1265,7 +1290,7 @@ func buildAdminOperation(config string, form *AdminForm) (AdminOperation, error)
 			args = append(args, "-max-networks", values["Max networks"])
 		}
 		if values["Enabled"] != "true" {
-			if err := boolArg(&args, "-enabled", values["Enabled"]); err != nil {
+			if err := standardBoolArg(&args, "-enabled", values["Enabled"]); err != nil {
 				return AdminOperation{}, err
 			}
 		}
@@ -1539,8 +1564,27 @@ func buildAdminOperation(config string, form *AdminForm) (AdminOperation, error)
 	}
 	if form.Kind == "user-delete" {
 		op.NeedsSojuConfirmation = true
+		op.TargetUser = values["Username"]
+	}
+	if form.Kind == "network-create" || form.Kind == "network-update" {
+		if fallback := unixSchemeFallbackArgs(op.Args); len(fallback) > 0 {
+			op.CompatibilityFallback = fallback
+			op.FallbackPreview = redactedCommandPreview(config, fallback, secrets)
+		}
 	}
 	return op, nil
+}
+
+func validateDiscoverableUsername(username string) error {
+	if username != strings.TrimSpace(username) {
+		return errors.New("username cannot begin or end with whitespace because Soju status output cannot represent it unambiguously")
+	}
+	for _, ambiguous := range []string{" (admin)", " (disabled)", " (admin, disabled)", " (disabled, admin)"} {
+		if strings.HasSuffix(username, ambiguous) {
+			return errors.New("username cannot end with a Soju status attribute marker such as " + ambiguous)
+		}
+	}
+	return nil
 }
 
 func parseMaxNetworks(value string) (int, error) {
@@ -1588,6 +1632,19 @@ func decodeFingerprint(value string) ([]byte, error) {
 }
 
 func makeAdminOperation(config, summary string, args, refresh []string, mutating bool, secrets []string) AdminOperation {
+	preview := redactedCommandPreview(config, args, secrets)
+	return AdminOperation{
+		Summary:               summary,
+		Args:                  append([]string(nil), args...),
+		Refresh:               append([]string(nil), refresh...),
+		Mutating:              mutating,
+		Secrets:               append([]string(nil), secrets...),
+		Preview:               preview,
+		NeedsSojuConfirmation: false,
+	}
+}
+
+func redactedCommandPreview(config string, args, secrets []string) string {
 	previewArgs := append([]string(nil), args...)
 	for i, value := range previewArgs {
 		for _, secret := range secrets {
@@ -1596,25 +1653,44 @@ func makeAdminOperation(config, summary string, args, refresh []string, mutating
 			}
 		}
 	}
-	return AdminOperation{
-		Summary:               summary,
-		Args:                  append([]string(nil), args...),
-		Refresh:               append([]string(nil), refresh...),
-		Mutating:              mutating,
-		Secrets:               append([]string(nil), secrets...),
-		Preview:               formatSojuCtlCommand(config, previewArgs),
-		NeedsSojuConfirmation: false,
-	}
+	return formatSojuCtlCommand(config, previewArgs)
 }
 
-var userDeleteConfirmation = regexp.MustCompile(`To confirm user deletion, send "user delete ([^"[:space:]]+) ([0-9a-f]+)"`)
+var userDeleteConfirmationToken = regexp.MustCompile(` ([0-9a-f]{6})"`)
 
-func parseUserDeleteConfirmation(output string) ([]string, string, bool) {
-	match := userDeleteConfirmation.FindStringSubmatch(output)
-	if len(match) != 3 {
+func parseUserDeleteConfirmation(output, expectedUsername string) ([]string, string, bool) {
+	if expectedUsername == "" {
 		return nil, "", false
 	}
-	return []string{"user", "delete", match[1], match[2]}, match[1], true
+	expectedPrefix := `To confirm user deletion, send "user delete ` + expectedUsername
+	start := strings.Index(output, expectedPrefix)
+	if start < 0 {
+		return nil, "", false
+	}
+	remainder := output[start+len(expectedPrefix):]
+	match := userDeleteConfirmationToken.FindStringSubmatch(remainder)
+	if len(match) != 2 || match[0] != remainder[:len(match[0])] {
+		return nil, "", false
+	}
+	return []string{"user", "delete", expectedUsername, match[1]}, expectedUsername, true
+}
+
+func unixSchemeFallbackArgs(args []string) []string {
+	fallback := append([]string(nil), args...)
+	for index := 0; index+1 < len(fallback); index++ {
+		if fallback[index] != "-addr" || !strings.HasPrefix(fallback[index+1], "unix://") {
+			continue
+		}
+		fallback[index+1] = "irc+unix://" + strings.TrimPrefix(fallback[index+1], "unix://")
+		return fallback
+	}
+	return nil
+}
+
+var unixSchemeCompatibilityError = regexp.MustCompile(`(?i)unknown scheme ["']unix["'].*supported schemes:.*irc\+unix`)
+
+func isUnixSchemeCompatibilityError(output string) bool {
+	return unixSchemeCompatibilityError.MatchString(output)
 }
 
 func redactText(text string, secrets []string) string {
