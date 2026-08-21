@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 
@@ -94,6 +95,27 @@ func TestFullAdminBrandBottleStaysOnOneAxis(t *testing.T) {
 	}
 	if width := adminBrandWidth(fullAdminBrand); width > 62 {
 		t.Fatalf("full brand width = %d, expected it to fit a 62-column pane", width)
+	}
+}
+
+func TestAdminOutputScrollShowsOlderLines(t *testing.T) {
+	app := newTestApp()
+	defer app.close()
+	app.backend = &SojuCtl{Path: "/usr/bin/sojuctl", Config: "/etc/soju/config"}
+	app.admin.View = adminOutput
+	for i := 1; i <= 30; i++ {
+		app.admin.Output = append(app.admin.Output, fmt.Sprintf("output line %02d", i))
+	}
+
+	latest := renderAdminScreen(t, app, 100, 14)
+	if !strings.Contains(latest, "output line 30") {
+		t.Fatalf("latest output was not rendered:\n%s", latest)
+	}
+
+	app.admin.OutputScroll = adminOutputPageSize
+	older := renderAdminScreen(t, app, 100, 14)
+	if !strings.Contains(older, "output line 22") || strings.Contains(older, "output line 30") {
+		t.Fatalf("output paging did not show the older window:\n%s", older)
 	}
 }
 
