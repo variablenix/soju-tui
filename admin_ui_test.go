@@ -37,6 +37,18 @@ func TestAdminUIUsesAdministrationIdentityAndResponsiveBrand(t *testing.T) {
 	if strings.Contains(short, "SOJU-TUI") {
 		t.Fatalf("brand should be omitted when it would crowd the output:\n%s", short)
 	}
+
+	app.admin.HelpOpen = true
+	app.admin.HelpScroll = 0
+	help := renderAdminScreen(t, app, 80, 24)
+	if !strings.Contains(help, "SOJU-TUI HELP & DOCUMENTATION") || !strings.Contains(help, "Up/Down") {
+		t.Fatalf("help view did not render from the beginning:\n%s", help)
+	}
+	app.admin.HelpScroll = len(sojuTUIHelp()) - 5
+	help = renderAdminScreen(t, app, 80, 24)
+	if !strings.Contains(help, "https://soju.im/") || !strings.Contains(help, "does not open") {
+		t.Fatalf("help documentation links were not reachable by scrolling:\n%s", help)
+	}
 }
 
 func renderAdminScreen(t *testing.T, app *App, width, height int) string {

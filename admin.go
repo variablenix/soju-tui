@@ -118,7 +118,46 @@ func adminMenuItems() []AdminMenuItem {
 		{Label: "Delete client device certificate", Kind: "device-cert-delete", Command: "device-certificate delete"},
 		{Label: "Broadcast server notice", Kind: "server-notice", Command: "server notice"},
 		{Label: "Toggle server debug", Kind: "server-debug", Command: "server debug"},
-		{Label: "BouncerServ help", Kind: "help", Command: "help"},
+		{Label: "Soju-TUI help & documentation", Kind: "tui-help"},
+		{Label: "BouncerServ command help", Kind: "help", Command: "help"},
+	}
+}
+
+func sojuTUIHelp() []string {
+	return []string{
+		"SOJU-TUI HELP & DOCUMENTATION",
+		"Administration-only frontend for a running Soju instance through sojuctl. It manages bouncer configuration and runtime state.",
+		"",
+		"NAVIGATION",
+		"  Up/Down: select an action     Home/End: first or last action",
+		"  Enter: open or advance       Space: cycle available choices",
+		"  Ctrl-S: preview a form       Esc: cancel or go back",
+		"  ? or F1: this help           q/Q/Ctrl-C/Ctrl-Q: confirm exit",
+		"",
+		"USERS",
+		"  List or inspect users; create, update, disable, promote, or delete an account; update IRC identity defaults.",
+		"",
+		"NETWORKS & CHANNELS",
+		"  Inspect and manage each user's saved networks and channels. Raw network commands are high-risk and redacted.",
+		"",
+		"CERTIFICATES & SASL",
+		"  Inspect the Soju host TLS certificate; manage per-network upstream CertFP and SASL; manage client certificates when supported.",
+		"  Host TLS, upstream CertFP, and downstream client certificates are separate certificate types.",
+		"",
+		"SERVER OPERATIONS",
+		"  View server status, broadcast notices, toggle debug logging, or query the server-provided BouncerServ command help.",
+		"",
+		"SAFETY",
+		"  Read-only actions run directly. Every mutation requires confirmation; destructive or high-risk actions require an exact phrase.",
+		"  Passwords and sensitive network commands are redacted. Normal TUI operation never invokes sudo or a shell.",
+		"",
+		"UPSTREAM SOJU DOCUMENTATION",
+		"  Project:  https://soju.im/",
+		"  Manual:   https://soju.im/doc/soju.1.html",
+		"  sojuctl:  https://soju.im/doc/sojuctl.1.html",
+		"  Source:   https://codeberg.org/emersion/soju",
+		"",
+		"URLs are displayed as plain text for copying. Soju-TUI does not open them or fetch remote content.",
 	}
 }
 
@@ -191,6 +230,14 @@ func (a *App) adminHandleKey(key string, r rune) {
 		a.adminFormKeyLocked(key, r)
 		return
 	}
+	if a.admin.HelpOpen {
+		a.adminHelpKeyLocked(key)
+		return
+	}
+	if key == "help" || key == "?" {
+		a.adminShowHelpLocked()
+		return
+	}
 	items := a.adminMenuItemsLocked()
 	switch key {
 	case "up":
@@ -239,6 +286,10 @@ func (a *App) adminActivateMenuLocked(cursor int) {
 		return
 	}
 	item := items[cursor]
+	if item.Kind != "tui-help" {
+		a.admin.HelpOpen = false
+		a.admin.HelpScroll = 0
+	}
 	switch item.Kind {
 	case "server-status":
 		a.adminRequestReadOnlyLocked("Server status", []string{"server", "status"})
@@ -246,6 +297,8 @@ func (a *App) adminActivateMenuLocked(cursor int) {
 		a.adminShowServerTLSLocked()
 	case "user-status":
 		a.adminRequestReadOnlyLocked("List users", []string{"user", "status"})
+	case "tui-help":
+		a.adminShowHelpLocked()
 	case "help":
 		a.adminRequestReadOnlyLocked("BouncerServ help", []string{"help"})
 	default:
@@ -254,6 +307,45 @@ func (a *App) adminActivateMenuLocked(cursor int) {
 		} else {
 			a.adminOpenFormLocked(item.Kind)
 		}
+	}
+}
+
+func (a *App) adminShowHelpLocked() {
+	a.admin.HelpOpen = true
+	a.admin.HelpScroll = 0
+	a.admin.View = adminOutput
+	a.setStatusLocked("Soju-TUI help · Up/Down scrolls · Esc or ? closes", 0)
+}
+
+func (a *App) adminHelpKeyLocked(key string) {
+	last := len(sojuTUIHelp()) - 1
+	switch key {
+	case "help", "?", "esc":
+		a.admin.HelpOpen = false
+		a.admin.HelpScroll = 0
+		a.setStatusLocked("ready", 0)
+	case "up":
+		if a.admin.HelpScroll > 0 {
+			a.admin.HelpScroll--
+		}
+	case "down":
+		if a.admin.HelpScroll < last {
+			a.admin.HelpScroll++
+		}
+	case "pageup":
+		a.admin.HelpScroll -= 8
+		if a.admin.HelpScroll < 0 {
+			a.admin.HelpScroll = 0
+		}
+	case "pagedown":
+		a.admin.HelpScroll += 8
+		if a.admin.HelpScroll > last {
+			a.admin.HelpScroll = last
+		}
+	case "home":
+		a.admin.HelpScroll = 0
+	case "end":
+		a.admin.HelpScroll = last
 	}
 }
 

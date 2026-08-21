@@ -16,6 +16,21 @@ displays a Soju-TUI wordmark and ASCII bottle. A compact mark is used on medium
 terminals, and all decorative branding is omitted when command output or
 terminal dimensions need the space.
 
+## Built-in help
+
+Press `?` or `F1`, or select **Soju-TUI help & documentation**, for a concise
+guide to navigation, users, networks, channels, certificates, SASL, server
+operations, and confirmation behavior. This local help is separate from
+**BouncerServ command help**, which queries the command list exposed by the
+running Soju version.
+
+The help screen includes the upstream Soju project, manual, `sojuctl` manual,
+and source URLs as plain text. It never launches a browser, invokes a shell, or
+fetches remote content.
+
+Inside help, use `↑`/`↓` for line scrolling, `Page Up`/`Page Down` for larger
+steps, `Home`/`End` to jump, and `Esc` or `?` to close it.
+
 ## All users or a specific user
 
 Use **List users** to display Soju's current user listing. Before every
@@ -101,4 +116,5 @@ and production Let's Encrypt guidance.
 - exact phrase + `Enter` — approve a destructive/high-risk mutation
 - `n` or `Esc` — cancel a confirmation; `Esc` also cancels forms
 - `r` — repeat the last read-only refresh
+- `?` or `F1` — open built-in Soju-TUI help
 - `q`, `Q`, `Ctrl-C`, or `Ctrl-Q` — open exit confirmation

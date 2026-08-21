@@ -24,6 +24,10 @@ Every operation uses an argument vector with `exec.CommandContext`. User input
 is not interpolated into shell syntax, and the program never invokes `sh -c`.
 Inputs containing NUL, carriage return, or newline are rejected.
 
+Built-in Soju-TUI help is compiled static text. Documentation URLs are shown
+for copying only; the help action does not launch a browser, make a network
+request, invoke `sojuctl`, or execute a shell.
+
 Read-only actions execute directly. Every mutation has a review screen;
 destructive and high-risk changes require an exact typed phrase. Exiting also
 requires confirmation, including while an operation is running.
