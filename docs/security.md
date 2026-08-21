@@ -10,6 +10,14 @@ The admin socket grants powerful control over all Soju users. Limit access to
 trusted local administrators. The setup wizard applies a per-user ACL and never
 makes the socket world-writable.
 
+The setup wizard installs a root-owned mode-`0755` copy in
+`/usr/local/bin/soju-tui`; it does not create a link into a user-writable Git
+checkout. It rejects symbolic links and install directories that are not
+root-owned or that are writable by a group or other users. A multiple-link file
+is never trusted as current. Updates use a temporary file in the destination
+directory followed by an atomic rename, and replacing an existing file requires
+confirmation.
+
 ## Command execution
 
 Every operation uses an argument vector with `exec.CommandContext`. User input
@@ -56,5 +64,5 @@ of guessing that no certificate exists.
 ## Scope
 
 The TUI does not edit Soju's config, database, listeners, or service definition.
-The explicit setup wizard is the only component that requests elevated access;
-normal TUI operation never invokes `sudo`.
+The explicit system setup wizard is the only component that requests elevated
+access; normal TUI operation and `soju-tui -setup` never invoke `sudo`.

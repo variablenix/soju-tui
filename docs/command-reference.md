@@ -2,8 +2,8 @@
 
 `soju-tui` builds these argument sequences directly and does not invoke a
 shell. The examples below document the upstream Soju command grammar used by
-the TUI. After the first-time socket-access setup, run the TUI as the authorized
-regular account; routine administration does not need `sudo`.
+the TUI. After the system setup, run the TUI as the authorized regular account;
+routine administration does not need `sudo`.
 
 Use the active config with direct `sojuctl` checks:
 
