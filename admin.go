@@ -89,6 +89,8 @@ func (a *App) adminMenuItemsLocked() []AdminMenuItem {
 
 var safeDisplayArg = regexp.MustCompile(`^[A-Za-z0-9_@+.,:/=-]+$`)
 
+const allNetworksSelection = "<all networks>"
+
 func adminMenuItems() []AdminMenuItem {
 	return []AdminMenuItem{
 		{Label: "Server status", Kind: "server-status", Command: "server status"},
@@ -130,7 +132,7 @@ func sojuTUIHelp() []string {
 		"",
 		"NAVIGATION",
 		"  Up/Down: select an action     Home/End: first or last action",
-		"  Enter: open or advance       Space: cycle available choices",
+		"  Enter: open or advance       Space: cycle users, networks, channels, and choices",
 		"  Ctrl-S: preview a form       Esc: cancel or go back",
 		"  ? or F1: this help           q/Q/Ctrl-C/Ctrl-Q: confirm exit",
 		"",
@@ -138,7 +140,7 @@ func sojuTUIHelp() []string {
 		"  List or inspect users; create, update, disable, promote, or delete an account; update IRC identity defaults.",
 		"",
 		"NETWORKS & CHANNELS",
-		"  Inspect and manage each user's saved networks and channels. Raw network commands are high-risk and redacted.",
+		"  Discover and select each user's saved networks and channels before inspecting or changing them. Raw network commands are high-risk and redacted.",
 		"",
 		"CERTIFICATES & SASL",
 		"  Inspect the Soju host TLS certificate; manage per-network upstream CertFP and SASL; manage client certificates when supported.",
@@ -404,6 +406,29 @@ func (a *App) adminOpenFormLocked(kind string) {
 }
 
 func (a *App) adminOpenFormWithUsersLocked(kind string, users []string) error {
+	if adminFormRequiresExistingNetwork(kind) {
+		title := "Choose a user"
+		if target, err := newAdminForm(kind); err == nil {
+			title += " — " + target.Title
+		}
+		form := &AdminForm{
+			Kind:       "network-discovery",
+			TargetKind: kind,
+			Title:      title,
+			Fields: []AdminField{{
+				Label: "User", Required: true, Kind: "text",
+				Help: "select the user whose saved networks should be loaded",
+			}},
+		}
+		if err := addUserChoices(form, users); err != nil {
+			return err
+		}
+		a.admin.Form = form
+		a.admin.View = adminForm
+		a.admin.Confirm = nil
+		a.setStatusLocked("Choose a user, then load their saved networks", 0)
+		return nil
+	}
 	form, err := newAdminForm(kind)
 	if err != nil {
 		return err
@@ -415,6 +440,158 @@ func (a *App) adminOpenFormWithUsersLocked(kind string, users []string) error {
 	a.admin.View = adminForm
 	a.admin.Confirm = nil
 	a.setStatusLocked("Space cycles discovered users · typing selects a specific username", 0)
+	return nil
+}
+
+func adminFormRequiresExistingNetwork(kind string) bool {
+	switch kind {
+	case "network-update", "network-delete", "network-quote",
+		"channel-create", "channel-update", "channel-delete", "channel-status",
+		"cert-generate", "cert-fingerprint",
+		"sasl-status", "sasl-set-plain", "sasl-reset":
+		return true
+	default:
+		return false
+	}
+}
+
+func adminFormRequiresExistingChannel(kind string) bool {
+	return kind == "channel-update" || kind == "channel-delete"
+}
+
+func networkSelectionAllowsAll(kind string) bool {
+	return kind == "channel-status" || kind == "cert-fingerprint"
+}
+
+func networkTargets(networks []NetworkStatus) []string {
+	targets := make([]string, 0, len(networks))
+	seen := make(map[string]bool)
+	for _, network := range networks {
+		target := network.Target()
+		if target != "" && !seen[target] {
+			targets = append(targets, target)
+			seen[target] = true
+		}
+	}
+	return targets
+}
+
+func addNetworkChoices(form *AdminForm, user string, networks []NetworkStatus, allowAll bool) error {
+	targets := networkTargets(networks)
+	if len(targets) == 0 {
+		return errors.New("this user has no saved Soju networks")
+	}
+	for index := range form.Fields {
+		field := &form.Fields[index]
+		switch field.Label {
+		case "User":
+			field.Kind = "readonly"
+			field.Value = user
+			field.Original = user
+			field.Help = "selected user; cancel to choose another"
+		case "Network":
+			options := append([]string(nil), targets...)
+			if allowAll {
+				options = append([]string{allNetworksSelection}, options...)
+				field.Required = false
+			}
+			field.Kind = "network"
+			field.Options = options
+			field.Value = options[0]
+			field.Original = options[0]
+			field.Help = "Space cycles discovered networks; Backspace/type enters a specific network"
+			if allowAll {
+				field.Help = "Space cycles All/discovered networks; blank also means all networks"
+			}
+		}
+	}
+	return nil
+}
+
+func (a *App) adminOpenNetworkFormLocked(kind, user, output string) error {
+	networks := parseNetworkStatuses(output)
+	if len(networks) == 0 {
+		return errors.New("no saved Soju networks were discovered for user " + user)
+	}
+	if adminFormRequiresExistingChannel(kind) {
+		form := &AdminForm{Kind: "channel-discovery", TargetKind: kind, Title: "Choose a network", Fields: []AdminField{
+			{Label: "User", Value: user, Original: user, Required: true, Kind: "readonly", Help: "selected user; cancel to choose another"},
+			{Label: "Network", Required: true, Kind: "text"},
+		}}
+		if err := addNetworkChoices(form, user, networks, false); err != nil {
+			return err
+		}
+		a.admin.Form = form
+		a.admin.View = adminForm
+		a.setStatusLocked("Choose a network, then load its saved channels", 0)
+		return nil
+	}
+	form, err := newAdminForm(kind)
+	if err != nil {
+		return err
+	}
+	if err := addNetworkChoices(form, user, networks, networkSelectionAllowsAll(kind)); err != nil {
+		return err
+	}
+	a.admin.Form = form
+	a.admin.View = adminForm
+	a.setStatusLocked("Space cycles discovered networks; typing selects a specific network", 0)
+	return nil
+}
+
+func addChannelChoices(form *AdminForm, user, network string, channels []ChannelStatus) error {
+	if len(channels) == 0 {
+		return errors.New("no saved channels were discovered on network " + network)
+	}
+	for index := range form.Fields {
+		field := &form.Fields[index]
+		switch field.Label {
+		case "User":
+			field.Kind, field.Value, field.Original = "readonly", user, user
+		case "Network":
+			field.Kind, field.Value, field.Original = "readonly", network, network
+		case "Channel":
+			field.Kind = "channel"
+			field.Options = make([]string, 0, len(channels))
+			for _, channel := range channels {
+				field.Options = append(field.Options, channel.Name)
+			}
+			field.Value, field.Original = field.Options[0], field.Options[0]
+			field.Help = "Space cycles discovered channels; Backspace/type enters a specific channel"
+		}
+	}
+	return nil
+}
+
+func (a *App) adminOpenChannelFormLocked(kind, user, network, output string) error {
+	channels := parseChannelStatuses(output)
+	if len(channels) == 0 {
+		return errors.New("no saved channels were discovered on network " + network)
+	}
+	if kind == "channel-update" {
+		form := &AdminForm{Kind: "channel-update-lookup", TargetKind: kind, Title: "Choose a channel to update", Fields: []AdminField{
+			{Label: "User", Value: user, Original: user, Required: true, Kind: "readonly"},
+			{Label: "Network", Value: network, Original: network, Required: true, Kind: "readonly"},
+			{Label: "Channel", Required: true, Kind: "text"},
+		}}
+		if err := addChannelChoices(form, user, network, channels); err != nil {
+			return err
+		}
+		a.admin.Form = form
+		a.admin.View = adminForm
+		a.setStatusLocked("Choose a saved channel to load its current public state", 0)
+		return nil
+	}
+	form, err := newAdminForm(kind)
+	if err != nil {
+		return err
+	}
+	if err := addChannelChoices(form, user, network, channels); err != nil {
+		return err
+	}
+	a.admin.Form = form
+	a.admin.View = adminForm
+	a.setStatusLocked("Space cycles discovered channels; typing selects a specific channel", 0)
 	return nil
 }
 
@@ -594,7 +771,7 @@ func (a *App) adminFormKeyLocked(key string, r rune) {
 			form.Cursor--
 		}
 	case "backspace":
-		if field.Kind == "text" || field.Kind == "user" {
+		if field.Kind == "text" || field.Kind == "user" || field.Kind == "network" || field.Kind == "channel" {
 			runes := []rune(field.Value)
 			if len(runes) > 0 {
 				field.Value = string(runes[:len(runes)-1])
@@ -619,7 +796,7 @@ func (a *App) adminFormKeyLocked(key string, r rune) {
 		a.admin.View = adminDashboard
 		a.setStatusLocked("form cancelled", 3e9)
 	default:
-		if r != 0 && (field.Kind == "text" || field.Kind == "user") {
+		if r != 0 && (field.Kind == "text" || field.Kind == "user" || field.Kind == "network" || field.Kind == "channel") {
 			field.Value += string(r)
 		}
 	}
@@ -649,6 +826,9 @@ func adminCycleField(field *AdminField) {
 			field.Value = "true"
 		}
 	case "select":
+		if len(field.Options) == 0 {
+			return
+		}
 		for i, value := range field.Options {
 			if field.Value == value {
 				field.Value = field.Options[(i+1)%len(field.Options)]
@@ -656,7 +836,10 @@ func adminCycleField(field *AdminField) {
 			}
 		}
 		field.Value = field.Options[0]
-	case "user":
+	case "user", "network", "channel":
+		if len(field.Options) == 0 {
+			return
+		}
 		for index, value := range field.Options {
 			if field.Value == value {
 				field.Value = field.Options[(index+1)%len(field.Options)]
@@ -670,6 +853,18 @@ func adminCycleField(field *AdminField) {
 func (a *App) adminSubmitFormLocked() {
 	form := a.admin.Form
 	if form == nil {
+		return
+	}
+	if form.Kind == "network-discovery" {
+		a.adminSubmitNetworkDiscoveryLocked(form)
+		return
+	}
+	if form.Kind == "channel-discovery" {
+		a.adminSubmitChannelDiscoveryLocked(form)
+		return
+	}
+	if form.Kind == "cert-fingerprint" && (formValue(form, "Network") == "" || formValue(form, "Network") == allNetworksSelection) {
+		a.adminStartCertFingerprintBatchLocked(form)
 		return
 	}
 	op, err := buildAdminOperation(a.backend.Config, form)
@@ -708,6 +903,103 @@ func (a *App) adminSubmitFormLocked() {
 	a.mu.Unlock()
 	a.requestOperation(op)
 	a.mu.Lock()
+}
+
+func formValue(form *AdminForm, label string) string {
+	for _, field := range form.Fields {
+		if field.Label == label {
+			return strings.TrimSpace(field.Value)
+		}
+	}
+	return ""
+}
+
+func (a *App) adminSubmitNetworkDiscoveryLocked(form *AdminForm) {
+	user := formValue(form, "User")
+	if user == "" {
+		a.setStatusLocked("User is required", 5e9)
+		return
+	}
+	op := makeAdminOperation(a.backend.Config, "Load saved networks for "+user, []string{"user", "run", user, "network", "status"}, nil, false, nil)
+	op.FollowUpKind, op.FormKind, op.TargetUser, op.Quiet = "open-network-form", form.TargetKind, user, true
+	a.admin.Form = nil
+	a.mu.Unlock()
+	a.requestOperation(op)
+	a.mu.Lock()
+}
+
+func (a *App) adminSubmitChannelDiscoveryLocked(form *AdminForm) {
+	user, network := formValue(form, "User"), formValue(form, "Network")
+	if user == "" || network == "" {
+		a.setStatusLocked("User and Network are required", 5e9)
+		return
+	}
+	op := makeAdminOperation(a.backend.Config, "Load saved channels on "+network, []string{"user", "run", user, "channel", "status", "-network", network}, nil, false, nil)
+	op.FollowUpKind, op.FormKind, op.TargetUser, op.TargetNetwork, op.Quiet = "open-channel-form", form.TargetKind, user, network, true
+	a.admin.Form = nil
+	a.mu.Unlock()
+	a.requestOperation(op)
+	a.mu.Lock()
+}
+
+func certFingerprintBatchOperations(config, user string, networks []string) []AdminOperation {
+	operations := make([]AdminOperation, 0, len(networks))
+	for _, network := range networks {
+		if network == "" || network == allNetworksSelection {
+			continue
+		}
+		args := []string{"user", "run", user, "certfp", "fingerprint", "-network", network}
+		op := makeAdminOperation(config, "Show upstream CertFP fingerprints", args, nil, false, nil)
+		op.FollowUpKind, op.TargetUser, op.TargetNetwork, op.Quiet = "cert-fingerprint-batch", user, network, true
+		operations = append(operations, op)
+	}
+	return operations
+}
+
+func (a *App) adminStartCertFingerprintBatchLocked(form *AdminForm) {
+	user := formValue(form, "User")
+	var networks []string
+	for _, field := range form.Fields {
+		if field.Label == "Network" {
+			for _, option := range field.Options {
+				if option != allNetworksSelection {
+					networks = append(networks, option)
+				}
+			}
+		}
+	}
+	operations := certFingerprintBatchOperations(a.backend.Config, user, networks)
+	if user == "" || len(operations) == 0 {
+		a.setStatusLocked("No discovered networks are available for CertFP inspection", 5e9)
+		return
+	}
+	a.admin.Form = nil
+	a.admin.Output = append(a.admin.Output, "UPSTREAM CERTFP FINGERPRINTS FOR USER: "+user)
+	a.admin.PendingBatch = append([]AdminOperation(nil), operations[1:]...)
+	a.admin.BatchFailures = 0
+	a.mu.Unlock()
+	a.requestOperation(operations[0])
+	a.mu.Lock()
+}
+
+func newChannelUpdateForm(user, network string, channel ChannelStatus) *AdminForm {
+	detached := "false"
+	if channel.Detached {
+		detached = "true"
+	}
+	field := func(label, value, kind, help string) AdminField {
+		return AdminField{Label: label, Value: value, Original: value, Required: label == "User" || label == "Network" || label == "Channel", Kind: kind, Help: help}
+	}
+	return &AdminForm{Kind: "channel-update", Title: "Update channel for user", Fields: []AdminField{
+		field("User", user, "readonly", "loaded target; cancel to choose another user"),
+		field("Network", network, "readonly", "loaded target; cancel to choose another network"),
+		field("Channel", channel.Name, "readonly", "loaded target; cancel to choose another channel"),
+		field("Detached", detached, "optional-bool", "loaded from channel status; Space cycles true/false"),
+		{Label: "Relay detached", Kind: "select", Help: "not exposed by Soju; blank keeps current; Space cycles choices", Options: []string{"", "message", "highlight", "none", "default"}},
+		{Label: "Reattach on", Kind: "select", Help: "not exposed by Soju; blank keeps current; Space cycles choices", Options: []string{"", "message", "highlight", "none", "default"}},
+		field("Detach after", "", "text", "not exposed by Soju; blank keeps current; duration such as 30m or 0"),
+		{Label: "Detach on", Kind: "select", Help: "not exposed by Soju; blank keeps current; Space cycles choices", Options: []string{"", "message", "highlight", "none", "default"}},
+	}}
 }
 
 func newNetworkUpdateForm(user string, network NetworkStatus) *AdminForm {
@@ -765,6 +1057,13 @@ func buildAdminOperation(config string, form *AdminForm) (AdminOperation, error)
 		}
 		if originals["Address"] != "" && strings.TrimSpace(values["Address"]) == "" {
 			return AdminOperation{}, errors.New("address cannot be empty; cancel and delete the network if it is no longer needed")
+		}
+	}
+	if form.Kind == "channel-update" {
+		for _, label := range []string{"User", "Network", "Channel"} {
+			if originals[label] != "" && values[label] != originals[label] {
+				return AdminOperation{}, errors.New("user, network, and channel identify the loaded target and cannot be changed; cancel and load a different channel")
+			}
 		}
 	}
 	boolArg := func(args *[]string, flagName, value string) error {
@@ -879,13 +1178,17 @@ func buildAdminOperation(config string, form *AdminForm) (AdminOperation, error)
 		}
 		return args, nil
 	}
-	channelArgs := func() ([]string, error) {
+	channelArgs := func(create bool) ([]string, error) {
 		args := []string{}
-		if err := boolArg(&args, "-detached", values["Detached"]); err != nil {
+		detached := values["Detached"]
+		if !create && detached == originals["Detached"] {
+			detached = ""
+		}
+		if err := boolArg(&args, "-detached", detached); err != nil {
 			return nil, err
 		}
 		for _, pair := range [][2]string{{"-relay-detached", "Relay detached"}, {"-reattach-on", "Reattach on"}, {"-detach-after", "Detach after"}, {"-detach-on", "Detach on"}} {
-			if values[pair[1]] != "" {
+			if values[pair[1]] != "" && (create || values[pair[1]] != originals[pair[1]]) {
 				args = append(args, pair[0], values[pair[1]])
 			}
 		}
@@ -1022,6 +1325,10 @@ func buildAdminOperation(config string, form *AdminForm) (AdminOperation, error)
 		mutating = false
 		args = userRun(values["User"], "network", "status")
 		refresh = args
+	case "channel-update-lookup":
+		mutating = false
+		args = userRun(values["User"], "channel", "status", "-network", values["Network"])
+		refresh = args
 	case "network-delete":
 		args = userRun(values["User"], "network", "delete", values["Network"])
 		refresh = userRun(values["User"], "network", "status")
@@ -1040,7 +1347,7 @@ func buildAdminOperation(config string, form *AdminForm) (AdminOperation, error)
 				return AdminOperation{}, errors.New("detach after must be 0 or a non-negative Go duration such as 30m or 2h")
 			}
 		}
-		channelOptions, err := channelArgs()
+		channelOptions, err := channelArgs(form.Kind == "channel-create")
 		if err != nil {
 			return AdminOperation{}, err
 		}
@@ -1059,7 +1366,7 @@ func buildAdminOperation(config string, form *AdminForm) (AdminOperation, error)
 	case "channel-status":
 		mutating = false
 		args = userRun(values["User"], "channel", "status")
-		if values["Network"] != "" {
+		if values["Network"] != "" && values["Network"] != allNetworksSelection {
 			args = append(args, "-network", values["Network"])
 		}
 		refresh = args
@@ -1144,6 +1451,11 @@ func buildAdminOperation(config string, form *AdminForm) (AdminOperation, error)
 		op.FollowUpKind = "network-update"
 		op.TargetUser = values["User"]
 		op.TargetNetwork = values["Network"]
+	case "channel-update-lookup":
+		op.FollowUpKind = "channel-update"
+		op.TargetUser = values["User"]
+		op.TargetNetwork = values["Network"]
+		op.TargetChannel = values["Channel"]
 	case "user-create":
 		if values["Admin"] == "true" {
 			op.ConfirmPhrase = "CREATE ADMIN USER"

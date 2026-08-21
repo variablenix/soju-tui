@@ -59,7 +59,8 @@ fingerprint, and requires a different exact phrase for creation versus
 replacement.
 
 The `-network` value must be an actual saved network name or address. `*` does
-not mean all networks. Inspect each network separately.
+not mean all networks. The TUI's **All networks** fingerprint view discovers
+the real targets and invokes the read-only command separately for each one.
 
 ## Corrections to common invalid forms
 

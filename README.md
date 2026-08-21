@@ -11,7 +11,10 @@ it is not an IRC chat client and never opens channels or displays messages.
 - Manage users, networks, channels, SASL, certificates, notices, and debugging.
 - View the Soju host TLS certificate, including issuer, names, validity, hostname
   match, fingerprint, and PEM chain length.
-- Select from freshly discovered Soju users or enter a specific username.
+- Select freshly discovered users, networks, and channels instead of retyping
+  saved targets; manual entry remains available for unusually large listings.
+- Inspect upstream CertFP fingerprints for one network or every saved network
+  in a grouped, colorized view.
 - Show only commands supported by the running Soju version.
 - Preview every mutation as a redacted `sojuctl` command before confirmation.
 - Open built-in, offline help with `?`, `F1`, or the help menu item.
