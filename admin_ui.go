@@ -81,7 +81,7 @@ func drawAdminSidebar(screen tcell.Screen, app *App, width, height int) {
 	}
 	putClipped(screen, 1, 1, width-1, "SOJU ADMINISTRATION", styleAccent)
 	putClipped(screen, 1, 2, width-1, "No IRC chat connection", styleMuted)
-	items := adminMenuItems()
+	items := app.adminMenuItemsLocked()
 	start := 0
 	visible := height - 4
 	if visible < 1 {
@@ -97,15 +97,10 @@ func drawAdminSidebar(screen tcell.Screen, app *App, width, height int) {
 		}
 		style := styleMuted
 		item := items[i]
-		label := item.Label
-		if app.adminUnsupportedReasonLocked(item.Kind) != "" {
-			label = "× " + label
-			style = styleError
-		}
 		if i == app.admin.Cursor && app.admin.Form == nil && app.admin.Confirm == nil {
 			style = styleAccent.Background(tcell.ColorDarkBlue)
 		}
-		putClipped(screen, 0, y, width, fmt.Sprintf(" %02d %s", i+1, label), style)
+		putClipped(screen, 0, y, width, fmt.Sprintf(" %02d %s", i+1, item.Label), style)
 	}
 }
 
