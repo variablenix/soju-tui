@@ -14,6 +14,10 @@ func handleAdminKeyEvent(app *App, event *tcell.EventKey) {
 		key = "up"
 	case tcell.KeyDown:
 		key = "down"
+	case tcell.KeyHome:
+		key = "home"
+	case tcell.KeyEnd:
+		key = "end"
 	case tcell.KeyTAB:
 		key = "tab"
 	case tcell.KeyBacktab:
@@ -92,11 +96,16 @@ func drawAdminSidebar(screen tcell.Screen, app *App, width, height int) {
 			break
 		}
 		style := styleMuted
+		item := items[i]
+		label := item.Label
+		if app.adminUnsupportedReasonLocked(item.Kind) != "" {
+			label = "× " + label
+			style = styleError
+		}
 		if i == app.admin.Cursor && app.admin.Form == nil && app.admin.Confirm == nil {
 			style = styleAccent.Background(tcell.ColorDarkBlue)
 		}
-		item := items[i]
-		putClipped(screen, 0, y, width, fmt.Sprintf(" %02d %s", i+1, item.Label), style)
+		putClipped(screen, 0, y, width, fmt.Sprintf(" %02d %s", i+1, label), style)
 	}
 }
 
