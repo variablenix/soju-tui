@@ -15,20 +15,22 @@ type adminBrandLine struct {
 	style tcell.Style
 }
 
+// fullAdminBrand adapts the Roy3d letterform to plain terminal cells and the
+// application's existing palette; it intentionally contains no ANSI escapes.
 var fullAdminBrand = []adminBrandLine{
-	{text: adminBrandWithBottle(` SSSSS    OOOOO     JJJJJ   U     U`, `____`, 50), style: styleAccent},
-	{text: adminBrandWithBottle(`S     S  O     O      J     U     U`, `|    |`, 49), style: styleAccent},
-	{text: adminBrandWithBottle(`S        O     O      J     U     U`, `|____|`, 49), style: styleAccent},
-	{text: adminBrandWithBottle(` SSSSS   O     O      J     U     U`, "/      \\", 48), style: styleAccent},
-	{text: adminBrandWithBottle(`      S  O     O  J   J     U     U`, "/          \\", 46), style: styleAccent},
-	{text: adminBrandWithBottle(`S     S  O     O  J   J     U     U`, "/            \\", 45), style: styleAccent},
-	{text: adminBrandWithBottle(` SSSSS    OOOOO    JJJ       UUUUU`, `|              |`, 44), style: styleAccent},
-	{text: adminBrandWithBottle(``, `|     SOJU     |`, 44), style: styleInfo},
-	{text: adminBrandWithBottle(`TTTTTTT  U     U  IIIII`, `|      TUI     |`, 44), style: styleInfo},
-	{text: adminBrandWithBottle(`   T     U     U    I`, `|              |`, 44), style: styleInfo},
-	{text: adminBrandWithBottle(`   T     U     U    I`, `|              |`, 44), style: styleInfo},
-	{text: adminBrandWithBottle(`   T     U     U    I`, `|______________|`, 44), style: styleInfo},
-	{text: adminBrandWithBottle(`   T      UUUUU   IIIII`, `\____________/`, 45), style: styleInfo},
+	{text: adminBrandWithBottle("  ______     _____      ___    ___  __", "____", 52), style: styleAccent},
+	{text: adminBrandWithBottle(" /  ____>   /  __ \\_   /\\ .\\  /\\  \\/\\ \\_", "|    |", 51), style: styleAccent},
+	{text: adminBrandWithBottle("/\\_____ \\_ /\\  \\/\\ ,\\  \\ \\ \\\\ \\ \\  \\ \\ ,\\", "|____|", 51), style: styleAccent},
+	{text: adminBrandWithBottle("\\/____/> ,\\\\ \\_ \\_> \\\\ _\\_>  \\ \\ \\_ \\_> \\\\", "/      \\", 50), style: styleAccent},
+	{text: adminBrandWithBottle("  /\\______/ \\/ >_____//\\_____/  \\/ >_____/", "/          \\", 48), style: styleAccent},
+	{text: adminBrandWithBottle("  \\/_____/   \\/_____/ \\/____/    \\/_____/", "/            \\", 47), style: styleAccent},
+	{text: adminBrandWithBottle("", "|              |", 46), style: styleInfo},
+	{text: adminBrandWithBottle(" _________  ___  __     ___", "|     SOJU     |", 46), style: styleInfo},
+	{text: adminBrandWithBottle("/\\__    __\\/\\  \\/\\ \\_  /\\  \\", "|      TUI     |", 46), style: styleInfo},
+	{text: adminBrandWithBottle("\\/__/\\ ,\\_/\\ \\  \\ \\ ,\\ \\ \\ .\\", "|              |", 46), style: styleInfo},
+	{text: adminBrandWithBottle("    \\ \\ \\\\  \\ \\_ \\_> \\\\ \\ \\ \\\\", "|              |", 46), style: styleInfo},
+	{text: adminBrandWithBottle("     \\ \\__\\  \\/ >_____/  \\ \\__\\", "|______________|", 46), style: styleInfo},
+	{text: adminBrandWithBottle("      \\/__/   \\/_____/    \\/__/", "\\____________/", 47), style: styleInfo},
 	{text: "", style: styleMuted},
 	{text: `              SOJU-TUI ADMINISTRATION CONSOLE`, style: styleMuted},
 }
