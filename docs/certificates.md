@@ -48,6 +48,16 @@ This makes it safe to use alongside an automated Let's Encrypt renewal hook.
 Soju for one user and one upstream IRC network. It does not use the hostname in
 the Soju config and never touches the host TLS files.
 
+The TUI asks for the exact saved network name and runs the equivalent of:
+
+```sh
+sojuctl -config /etc/soju/config user run USER certfp generate -network NETWORK
+```
+
+RSA generation is restricted to a secure 2048-8192-bit range within Soju's
+maximum. ECDSA and Ed25519 are also available on Soju versions that support
+those key types.
+
 Generation follows a fail-closed workflow:
 
 1. Run `certfp fingerprint` for the selected user and network.
@@ -55,7 +65,10 @@ Generation follows a fail-closed workflow:
    phrase `REPLACE EXISTING UPSTREAM CERTIFICATE`.
 3. If Soju explicitly reports `CertFP not set up`, require the exact phrase
    `GENERATE UPSTREAM CERTIFICATE`.
-4. For permission, connection, parsing, or unexpected command errors, stop
+4. After confirmation, run the fingerprint check again and require the state to
+   match what the operator reviewed. This closes the review-to-execution race
+   with another administrator.
+5. For permission, connection, parsing, or unexpected command errors, stop
    without running `certfp generate`.
 
 Replacing an existing CertFP changes upstream SASL EXTERNAL credentials. The
