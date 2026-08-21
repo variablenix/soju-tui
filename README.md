@@ -30,11 +30,16 @@ The Makefile remains available:
 make build
 ```
 
+Build outputs are written under `dist/`, so a host-native binary cannot be
+mistaken for the Linux deployment binary.
+
 For a build machine targeting a typical VPS:
 
 ```sh
 make linux-amd64
 ```
+
+The resulting binary is `dist/soju-tui-linux-amd64`.
 
 For ARM64 VPS hardware:
 
@@ -42,34 +47,50 @@ For ARM64 VPS hardware:
 make linux-arm64
 ```
 
+The resulting binary is `dist/soju-tui-linux-arm64`.
+
 Copy the resulting binary to the server and make it executable. The binary is built with `CGO_ENABLED=0`, so it does not need Go, ncurses, or other build tools after it has been copied.
 
 ## Connect
 
-The default is TLS on `127.0.0.1:6697`, which is useful when soju and the TUI run on the same VPS:
+On first run, `soju-tui` checks `/etc/soju/config` for the first non-admin IRC
+listener. It ignores `unix+admin://`, asks whether to use the detected
+listener, and saves the selected server, port, TLS hostname, and username in
+the per-user profile. The password is never saved.
+
+For the Linux amd64 binary built on the VPS:
 
 ```sh
-./soju-tui -username alice
+./dist/soju-tui-linux-amd64
 ```
 
-The program prompts for the password without echoing it. A remote TLS listener can be specified directly:
+The profile is stored at `~/.config/soju-tui/config.json` on Linux with mode
+`0600`. Use `-setup` to run the wizard again, `-soju-config PATH` to inspect a
+different daemon configuration, or `-profile PATH` to use a different profile.
+
+The program prompts for the password without echoing it. A remote TLS listener
+can still be specified directly:
 
 ```sh
-./soju-tui -server irc.example.net:6697 -username alice
+./dist/soju-tui-linux-amd64 -server irc.example.net:6697 -username alice
 ```
 
 If soju listens on a local unencrypted port, explicitly disable TLS:
 
 ```sh
-./soju-tui -server 127.0.0.1:6667 -tls=false -username alice
+./dist/soju-tui-linux-amd64 -server 127.0.0.1:6667 -tls=false -username alice
 ```
+
+If the listener is bound to a specific local address, such as
+`172.32.0.1:6697`, the setup wizard reads that address from `/etc/soju/config`.
+You can also provide it explicitly with `-server 172.32.0.1:6697`.
 
 The password can also be supplied through `SOJU_PASSWORD`, but an interactive prompt is safer than putting it in shell history or the process command line. Useful environment variables are `SOJU_SERVER`, `SOJU_USERNAME`, `SOJU_NICK`, `SOJU_REALNAME`, `SOJU_CLIENT`, `SOJU_NETWORK`, and `SOJU_TLS`.
 
 For a self-signed soju certificate, prefer installing/trusting the certificate. As a temporary alternative:
 
 ```sh
-./soju-tui -insecure-skip-verify
+./dist/soju-tui-linux-amd64 -insecure-skip-verify
 ```
 
 That option disables certificate verification and should not be used on an untrusted network.
@@ -105,7 +126,7 @@ The IRC chat view still supports the normal `/network list` command. Networks di
 If a client name is supplied, soju can keep per-client history separately:
 
 ```sh
-./soju-tui -client vps-tui -username alice
+./dist/soju-tui-linux-amd64 -client vps-tui -username alice
 ```
 
 ## Keys and commands
