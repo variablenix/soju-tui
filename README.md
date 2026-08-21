@@ -30,24 +30,32 @@ TUI as a user with that permission, or configure the service socket's group or
 ACL for the administrator who will run the TUI. The program does not silently
 invoke `sudo`.
 
-Soju deliberately creates the admin socket with mode `0600`. On a systemd-based
-Debian host, grant one trusted local administrator access with the included
-one-time helper:
+Soju deliberately creates the admin socket with mode `0600`. On first use,
+run the setup wizard from the repository:
 
 ```sh
-sudo ./scripts/grant-admin-access.sh --user "$(id -un)" --socket /run/soju/admin
+./scripts/setup.sh
 ```
 
-The helper verifies the username and socket path, shows the exact change, and
-asks for confirmation. It applies a per-user ACL and installs a small systemd
-path unit that reapplies the ACL when soju recreates the socket. It does not add
-the administrator to the soju service group and never makes the socket
-world-writable. Use `--dry-run` to print the proposed units without changing
-the host. Verify access afterward:
+The wizard requests `sudo`, detects the invoking Linux user, reads the admin
+socket from `/etc/soju/config`, offers to install the ACL utility if needed,
+previews the persistent systemd configuration, asks for confirmation, and
+verifies `sojuctl` as the local user. It applies a per-user ACL and installs a
+small systemd path unit that reapplies the ACL when soju recreates the socket.
+It never makes the socket world-writable. Use `./scripts/setup.sh --dry-run` to
+preview the setup without changing the host.
+
+The generated service is intentionally `Type=oneshot`: after a successful run,
+`soju-tui-admin-access.service` is inactive while
+`soju-tui-admin-access.path` remains active and watches the socket. Check the
+persistent watcher with:
 
 ```sh
-/usr/bin/sojuctl -config /etc/soju/config server status
+systemctl status soju-tui-admin-access.path
 ```
+
+`scripts/grant-admin-access.sh` remains available as the lower-level helper for
+custom automation.
 
 Passwords are not saved in the TUI profile. They are passed to `sojuctl` only
 for the operation that needs them and are redacted from the TUI preview and
@@ -120,13 +128,13 @@ building and writes binaries under `dist/`.
 For your x86_64 VPS:
 
 ```sh
-./scripts/build.sh --target linux-amd64 --version 0.2.1
+./scripts/build.sh --target linux-amd64 --version 0.2.2
 ```
 
 To pull the latest fast-forwardable commit and build:
 
 ```sh
-./scripts/build.sh --pull --target linux-amd64 --version 0.2.1
+./scripts/build.sh --pull --target linux-amd64 --version 0.2.2
 ```
 
 The helper prints each phase and defaults to `GOTOOLCHAIN=local`, so an old Go
@@ -160,7 +168,7 @@ make vet
 go test ./...
 go test -race ./...
 go vet ./...
-sh -n scripts/build.sh scripts/grant-admin-access.sh
+sh -n scripts/build.sh scripts/grant-admin-access.sh scripts/setup.sh
 ```
 
 The TUI operates on the documented running-instance administration surface.
