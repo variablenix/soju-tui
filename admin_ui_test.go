@@ -18,7 +18,8 @@ func TestAdminUIUsesAdministrationIdentityAndResponsiveBrand(t *testing.T) {
 	for _, expected := range []string{
 		adminSidebarSubtitle,
 		"SOJU-TUI ADMINISTRATION CONSOLE",
-		"|  SOJU  |",
+		"SSSS   OOO   JJJJJ  U   U",
+		"|     SOJU     |",
 	} {
 		if !strings.Contains(large, expected) {
 			t.Fatalf("large administration screen is missing %q:\n%s", expected, large)
@@ -29,7 +30,7 @@ func TestAdminUIUsesAdministrationIdentityAndResponsiveBrand(t *testing.T) {
 	}
 
 	compact := renderAdminScreen(t, app, 64, 18)
-	if !strings.Contains(compact, "SOJU-TUI") || !strings.Contains(compact, "| SOJU |") {
+	if !strings.Contains(compact, "SOJU-TUI") || !strings.Contains(compact, "|   SOJU   |") {
 		t.Fatalf("compact administration brand was not rendered:\n%s", compact)
 	}
 
@@ -48,6 +49,39 @@ func TestAdminUIUsesAdministrationIdentityAndResponsiveBrand(t *testing.T) {
 	help = renderAdminScreen(t, app, 80, 24)
 	if !strings.Contains(help, "https://soju.im/") || !strings.Contains(help, "does not open") {
 		t.Fatalf("help documentation links were not reachable by scrolling:\n%s", help)
+	}
+}
+
+func TestFullAdminBrandBottleStaysOnOneAxis(t *testing.T) {
+	patterns := []string{
+		"____",
+		"|    |",
+		"|____|",
+		`/      \`,
+		`/          \`,
+		`/            \`,
+		"|              |",
+		"|     SOJU     |",
+		"|      TUI     |",
+		"|              |",
+		"|______________|",
+	}
+	wantCenter := -1
+	for index, pattern := range patterns {
+		start := strings.Index(fullAdminBrand[index].text, pattern)
+		if start < 0 {
+			t.Fatalf("brand row %d is missing %q", index, pattern)
+		}
+		center := 2*start + len(pattern) - 1
+		if wantCenter < 0 {
+			wantCenter = center
+		}
+		if center != wantCenter {
+			t.Fatalf("bottle row %d center = %d, want %d", index, center, wantCenter)
+		}
+	}
+	if width := adminBrandWidth(fullAdminBrand); width > 48 {
+		t.Fatalf("full brand width = %d, expected it to fit a 48-column pane", width)
 	}
 }
 
