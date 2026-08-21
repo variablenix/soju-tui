@@ -1,0 +1,4 @@
+version=dev
+revision=eecdd06d06ae
+go=go version go1.26.6 darwin/arm64
+target=all
