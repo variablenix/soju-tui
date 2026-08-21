@@ -5,9 +5,12 @@ import (
 	"errors"
 	"fmt"
 	"os/exec"
+	"regexp"
 	"strings"
 	"time"
 )
+
+var adminSocketPermissionPattern = regexp.MustCompile(`(?m)dial unix ([^\r\n]+): connect: permission denied`)
 
 type SojuCtl struct {
 	Path    string
@@ -34,8 +37,11 @@ func (s *SojuCtl) Run(parent context.Context, args []string) (string, error) {
 	command := exec.CommandContext(ctx, s.Path, argv...)
 	output, err := command.CombinedOutput()
 	text := string(output)
-	if ctx.Err() != nil {
+	if errors.Is(ctx.Err(), context.DeadlineExceeded) {
 		return text, fmt.Errorf("sojuctl timed out after %s", timeout)
+	}
+	if errors.Is(ctx.Err(), context.Canceled) {
+		return text, errors.New("sojuctl operation cancelled")
 	}
 	if err != nil {
 		return text, fmt.Errorf("sojuctl failed: %w", err)
@@ -61,4 +67,22 @@ func quoteDisplayArg(value string) string {
 		return value
 	}
 	return "'" + strings.ReplaceAll(value, "'", "'\\''") + "'"
+}
+
+func sojuCtlFailureHint(output string) string {
+	match := adminSocketPermissionPattern.FindStringSubmatch(output)
+	if len(match) != 2 {
+		return ""
+	}
+	socketPath := strings.TrimSpace(match[1])
+	if socketPath == "" {
+		return ""
+	}
+	return strings.Join([]string{
+		"ADMIN SOCKET ACCESS DENIED",
+		"The current Linux account cannot write " + socketPath + ".",
+		"Run this once from the repository, then retry:",
+		"  sudo ./scripts/grant-admin-access.sh --user \"$(id -un)\" --socket " + quoteDisplayArg(socketPath),
+		"Do not make the admin socket world-writable.",
+	}, "\n")
 }

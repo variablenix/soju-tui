@@ -1,7 +1,7 @@
 #!/bin/sh
 set -eu
 
-ROOT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
+ROOT_DIR=$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd)
 cd "$ROOT_DIR"
 
 TARGET=${TARGET:-linux-amd64}
@@ -70,6 +70,9 @@ command -v "$GO_BIN" >/dev/null 2>&1 || { echo "Go is required to build soju-tui
 log "using $($GO_BIN version)"
 log "toolchain policy: GOTOOLCHAIN=$GO_TOOLCHAIN"
 
+log "checking shell helpers"
+sh -n scripts/build.sh
+sh -n scripts/grant-admin-access.sh
 log "downloading Go modules"
 go_cmd mod download
 log "running tests"
