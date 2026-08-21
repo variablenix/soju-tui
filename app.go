@@ -65,6 +65,8 @@ type AdminState struct {
 	Form             *AdminForm
 	Confirm          *AdminConfirmation
 	ExitConfirm      bool
+	HelpOpen         bool
+	HelpScroll       int
 	Busy             bool
 	LastRefresh      []string
 	LastOperation    *AdminOperation

@@ -1,10 +1,10 @@
 # soju-tui
 
+![soju-tui — IRC bouncer administration client](soju-tui.png)
+
 `soju-tui` is an administration-only terminal frontend for the [soju IRC
 bouncer](https://soju.im/). It manages the running instance through `sojuctl`;
 it is not an IRC chat client and never opens channels or displays messages.
-
-![soju-tui administration interface](soju-tui.png)
 
 ## Highlights
 
@@ -14,6 +14,7 @@ it is not an IRC chat client and never opens channels or displays messages.
 - Select from freshly discovered Soju users or enter a specific username.
 - Show only commands supported by the running Soju version.
 - Preview every mutation as a redacted `sojuctl` command before confirmation.
+- Open built-in, offline help with `?`, `F1`, or the help menu item.
 - Use a responsive Soju-TUI bottle wordmark without crowding command output.
 - Run from static Linux AMD64 or ARM64 binaries without Go or ncurses.
 
