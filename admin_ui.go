@@ -10,6 +10,8 @@ import (
 
 const adminSidebarSubtitle = "Managing Soju via sojuctl"
 
+const adminOutputPageSize = 8
+
 type adminBrandLine struct {
 	text  string
 	style tcell.Style
@@ -64,9 +66,17 @@ func handleAdminKeyEvent(app *App, event *tcell.EventKey) {
 	key := ""
 	switch event.Key() {
 	case tcell.KeyUp:
-		key = "up"
+		if event.Modifiers()&tcell.ModShift != 0 {
+			key = "scroll-up"
+		} else {
+			key = "up"
+		}
 	case tcell.KeyDown:
-		key = "down"
+		if event.Modifiers()&tcell.ModShift != 0 {
+			key = "scroll-down"
+		} else {
+			key = "down"
+		}
 	case tcell.KeyHome:
 		key = "home"
 	case tcell.KeyEnd:
@@ -126,7 +136,10 @@ func drawAdminUI(screen tcell.Screen, app *App) {
 	} else {
 		drawAdminOutput(screen, app, contentX, contentWidth, 2, height-4)
 	}
-	footer := " ↑↓ select  Enter open  ? help  r refresh  Esc back  Ctrl-S preview  q quit"
+	footer := " ↑↓ select  PgUp/PgDn scroll output  Enter open  ? help  r refresh  q quit"
+	if app.admin.View == adminOutput && app.admin.OutputScroll > 0 {
+		footer = " PgUp older  PgDn newer  End menu  ? help  q quit"
+	}
 	if app.admin.HelpOpen && !app.admin.ExitConfirm {
 		footer = " ↑↓ scroll  PgUp/PgDn page  Home/End jump  Esc or ? close  q quit"
 	}
@@ -206,19 +219,33 @@ func drawAdminOutput(screen tcell.Screen, app *App, x, width, y, height int) {
 			}
 		}
 	}
-	start := len(lines) - height
+	maxScroll := len(lines) - height
+	if maxScroll < 0 {
+		maxScroll = 0
+	}
+	scroll := app.admin.OutputScroll
+	if scroll > maxScroll {
+		scroll = maxScroll
+	}
+	start := len(lines) - height - scroll
 	if start < 0 {
 		start = 0
 	}
+	end := start + height
+	if end > len(lines) {
+		end = len(lines)
+	}
 	row := y
-	for _, line := range lines[start:] {
+	for _, line := range lines[start:end] {
 		if row >= y+height {
 			break
 		}
 		putClipped(screen, x, row, width, line.text, line.style)
 		row++
 	}
-	drawAdminBrand(screen, x, width, row+1, y+height)
+	if scroll == 0 {
+		drawAdminBrand(screen, x, width, row+1, y+height)
+	}
 }
 
 func drawAdminBrand(screen tcell.Screen, x, width, top, bottom int) {

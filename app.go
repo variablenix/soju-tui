@@ -64,6 +64,7 @@ type AdminState struct {
 	View             AdminView
 	Cursor           int
 	Output           []string
+	OutputScroll     int
 	Form             *AdminForm
 	Confirm          *AdminConfirmation
 	ExitConfirm      bool
@@ -144,6 +145,7 @@ func (a *App) requestOperation(op AdminOperation) {
 	}
 	if !op.Quiet {
 		a.admin.Output = append(a.admin.Output, "> "+op.Preview)
+		a.admin.OutputScroll = 0
 		a.admin.Output = trimOutput(a.admin.Output)
 	}
 	a.admin.Busy = true
@@ -165,6 +167,9 @@ func (a *App) processResult(result adminResult) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	a.admin.Busy = false
+	if !result.Operation.Quiet {
+		a.admin.OutputScroll = 0
+	}
 	output := redactText(result.Output, result.Operation.Secrets)
 	if !result.Operation.Quiet && strings.TrimSpace(output) != "" {
 		a.admin.Output = append(a.admin.Output, strings.TrimRight(output, "\n"))
