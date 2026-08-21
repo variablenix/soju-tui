@@ -22,6 +22,8 @@ func handleAdminKeyEvent(app *App, event *tcell.EventKey) {
 		key = "enter"
 	case tcell.KeyCtrlS:
 		key = "submit"
+	case tcell.KeyCtrlC, tcell.KeyCtrlQ:
+		key = "quit"
 	case tcell.KeyEscape:
 		key = "esc"
 	case tcell.KeyBackspace, tcell.KeyBackspace2:
@@ -50,14 +52,16 @@ func drawAdminUI(screen tcell.Screen, app *App) {
 	}
 	contentX := sidebarWidth + 2
 	contentWidth := width - contentX - 1
-	if app.admin.Confirm != nil {
+	if app.admin.ExitConfirm {
+		drawExitConfirmation(screen, app, contentX, contentWidth, 2, height-4)
+	} else if app.admin.Confirm != nil {
 		drawAdminConfirmation(screen, app, contentX, contentWidth, 2, height-4)
 	} else if app.admin.Form != nil {
 		drawAdminForm(screen, app, contentX, contentWidth, 2, height-4)
 	} else {
 		drawAdminOutput(screen, app, contentX, contentWidth, 2, height-4)
 	}
-	putClipped(screen, 0, height-2, width, " ↑↓ select  Enter open  r refresh  Esc back  Ctrl-S preview  Ctrl-C quit", styleMuted)
+	putClipped(screen, 0, height-2, width, " ↑↓ select  Enter open  r refresh  Esc back  Ctrl-S preview  q quit", styleMuted)
 	status := " " + app.currentStatusLocked()
 	if app.admin.Busy {
 		status += "  [running]"
@@ -198,4 +202,23 @@ func drawAdminConfirmation(screen tcell.Screen, app *App, x, width, y, height in
 		row++
 	}
 	putClipped(screen, x+2, boxY+boxHeight-2, boxWidth-4, "Press y to apply · n or Esc to cancel", styleAccent.Background(tcell.ColorDarkRed))
+}
+
+func drawExitConfirmation(screen tcell.Screen, app *App, x, width, y, height int) {
+	boxHeight := 9
+	if boxHeight > height {
+		boxHeight = height
+	}
+	boxY := y + (height-boxHeight)/2
+	background := styleError.Background(tcell.ColorDarkRed)
+	for row := 0; row < boxHeight; row++ {
+		putClipped(screen, x, boxY+row, width, " ", background)
+	}
+	putClipped(screen, x+2, boxY+1, width-4, "EXIT SOJU ADMINISTRATION?", background.Bold(true))
+	message := "No administrative changes will be made by exiting."
+	if app.admin.Busy {
+		message = "A sojuctl operation is running and will be cancelled."
+	}
+	putClipped(screen, x+2, boxY+3, width-4, message, styleNormal.Background(tcell.ColorDarkRed))
+	putClipped(screen, x+2, boxY+boxHeight-2, width-4, "Press y to exit · n or Esc to stay", styleAccent.Background(tcell.ColorDarkRed))
 }

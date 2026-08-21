@@ -30,6 +30,25 @@ TUI as a user with that permission, or configure the service socket's group or
 ACL for the administrator who will run the TUI. The program does not silently
 invoke `sudo`.
 
+Soju deliberately creates the admin socket with mode `0600`. On a systemd-based
+Debian host, grant one trusted local administrator access with the included
+one-time helper:
+
+```sh
+sudo ./scripts/grant-admin-access.sh --user "$(id -un)" --socket /run/soju/admin
+```
+
+The helper verifies the username and socket path, shows the exact change, and
+asks for confirmation. It applies a per-user ACL and installs a small systemd
+path unit that reapplies the ACL when soju recreates the socket. It does not add
+the administrator to the soju service group and never makes the socket
+world-writable. Use `--dry-run` to print the proposed units without changing
+the host. Verify access afterward:
+
+```sh
+/usr/bin/sojuctl -config /etc/soju/config server status
+```
+
 Passwords are not saved in the TUI profile. They are passed to `sojuctl` only
 for the operation that needs them and are redacted from the TUI preview and
 captured output. Because the upstream `sojuctl` interface accepts passwords as
@@ -90,7 +109,8 @@ this application's scope.
 - `y` — approve a mutation on the confirmation screen;
 - `n` or `Esc` — cancel or go back;
 - `r` — repeat the last read-only refresh;
-- `Ctrl-C`/`Ctrl-Q` — exit.
+- `q`, `Q`, `Ctrl-C`, or `Ctrl-Q` — open the exit confirmation;
+- `y` — confirm exit, or `n`/`Esc` — remain in the TUI.
 
 ## Build
 
@@ -100,13 +120,13 @@ building and writes binaries under `dist/`.
 For your x86_64 VPS:
 
 ```sh
-./scripts/build.sh --target linux-amd64 --version 0.2.0
+./scripts/build.sh --target linux-amd64 --version 0.2.1
 ```
 
 To pull the latest fast-forwardable commit and build:
 
 ```sh
-./scripts/build.sh --pull --target linux-amd64 --version 0.2.0
+./scripts/build.sh --pull --target linux-amd64 --version 0.2.1
 ```
 
 The helper prints each phase and defaults to `GOTOOLCHAIN=local`, so an old Go
@@ -140,7 +160,7 @@ make vet
 go test ./...
 go test -race ./...
 go vet ./...
-sh -n scripts/build.sh
+sh -n scripts/build.sh scripts/grant-admin-access.sh
 ```
 
 The TUI operates on the documented running-instance administration surface.

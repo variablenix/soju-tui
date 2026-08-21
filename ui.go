@@ -64,9 +64,6 @@ func handleUIEvent(screen tcell.Screen, app *App, event tcell.Event) bool {
 	case *tcell.EventResize:
 		screen.Sync()
 	case *tcell.EventKey:
-		if event.Key() == tcell.KeyCtrlC || event.Key() == tcell.KeyCtrlQ {
-			return true
-		}
 		handleAdminKeyEvent(app, event)
 	}
 	return false

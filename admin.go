@@ -47,6 +47,26 @@ func adminMenuItems() []AdminMenuItem {
 func (a *App) adminHandleKey(key string, r rune) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
+	if a.admin.ExitConfirm {
+		switch {
+		case key == "esc", r == 'n' || r == 'N':
+			a.admin.ExitConfirm = false
+			a.setStatusLocked("exit cancelled", 3e9)
+		case r == 'y' || r == 'Y':
+			a.admin.ExitConfirm = false
+			a.closeLocked()
+		}
+		return
+	}
+	if key == "quit" || ((r == 'q' || r == 'Q') && a.admin.Form == nil && a.admin.Confirm == nil) {
+		a.admin.ExitConfirm = true
+		if a.admin.Busy {
+			a.setStatusLocked("confirm exit; the running operation will be cancelled", 0)
+		} else {
+			a.setStatusLocked("confirm exit", 0)
+		}
+		return
+	}
 	if a.admin.Busy {
 		return
 	}

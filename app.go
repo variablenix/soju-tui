@@ -53,6 +53,7 @@ type AdminState struct {
 	Output        []string
 	Form          *AdminForm
 	Confirm       *AdminConfirmation
+	ExitConfirm   bool
 	Busy          bool
 	LastRefresh   []string
 	LastOperation *AdminOperation
@@ -66,6 +67,8 @@ type adminResult struct {
 
 type App struct {
 	mu       sync.RWMutex
+	ctx      context.Context
+	cancel   context.CancelFunc
 	backend  *SojuCtl
 	admin    AdminState
 	results  chan adminResult
@@ -77,7 +80,10 @@ type App struct {
 }
 
 func newAdminApp(backend *SojuCtl) *App {
+	ctx, cancel := context.WithCancel(context.Background())
 	a := &App{
+		ctx:     ctx,
+		cancel:  cancel,
 		backend: backend,
 		admin:   AdminState{View: adminOutput},
 		results: make(chan adminResult, 16),
@@ -93,12 +99,17 @@ func newAdminApp(backend *SojuCtl) *App {
 }
 
 func (a *App) close() {
-	a.closeOne.Do(func() {
-		a.mu.Lock()
-		a.quit = true
-		a.mu.Unlock()
-		close(a.done)
-	})
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	a.closeLocked()
+}
+
+func (a *App) closeLocked() {
+	a.quit = true
+	if a.cancel != nil {
+		a.cancel()
+	}
+	a.closeOne.Do(func() { close(a.done) })
 }
 
 func (a *App) requestOperation(op AdminOperation) {
@@ -116,7 +127,7 @@ func (a *App) requestOperation(op AdminOperation) {
 	a.mu.Unlock()
 
 	go func() {
-		output, err := a.backend.Run(context.Background(), op.Args)
+		output, err := a.backend.Run(a.ctx, op.Args)
 		select {
 		case a.results <- adminResult{Operation: op, Output: output, Err: err}:
 		case <-a.done:
@@ -134,6 +145,9 @@ func (a *App) processResult(result adminResult) {
 	}
 	if result.Err != nil {
 		a.admin.Output = append(a.admin.Output, "ERROR: "+redactText(result.Err.Error(), result.Operation.Secrets))
+		if hint := sojuCtlFailureHint(output); hint != "" {
+			a.admin.Output = append(a.admin.Output, hint)
+		}
 		a.setStatusLocked("sojuctl operation failed", 0)
 	} else {
 		if result.Operation.NeedsSojuConfirmation {
