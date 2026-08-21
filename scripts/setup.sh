@@ -230,7 +230,9 @@ if [ -n "$CHECKSUMS_PATH" ]; then
 	/*) ;;
 	*) fail "the checksums path must be absolute" ;;
 	esac
-	[ -f "$CHECKSUMS_PATH" ] && [ ! -L "$CHECKSUMS_PATH" ] || fail "$CHECKSUMS_PATH is missing, not regular, or a symbolic link"
+	if [ ! -f "$CHECKSUMS_PATH" ] || [ -L "$CHECKSUMS_PATH" ]; then
+		fail "$CHECKSUMS_PATH is missing, not regular, or a symbolic link"
+	fi
 	EXPECTED_SHA256=$(awk -v name="${TUI_BINARY##*/}" '$2 == name { print $1; found++ } END { if (found != 1) exit 1 }' "$CHECKSUMS_PATH") || fail "$CHECKSUMS_PATH must contain exactly one entry for ${TUI_BINARY##*/}"
 	[ "$EXPECTED_SHA256" = "$SOURCE_SHA256" ] || fail "$TUI_BINARY does not match $CHECKSUMS_PATH"
 fi
