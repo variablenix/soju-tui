@@ -18,9 +18,10 @@ func TestAdminUIUsesAdministrationIdentityAndResponsiveBrand(t *testing.T) {
 	for _, expected := range []string{
 		adminSidebarSubtitle,
 		"SOJU-TUI ADMINISTRATION CONSOLE",
-		"____    ___        _    _   _",
-		"| |_| |  | |_| |  | |_| |",
-		`\_____\_____\_____\_____/`,
+		"SSSSS    OOOOO     JJJJJ   U     U",
+		"S     S  O     O  J   J     U     U",
+		"SSSSS    OOOOO    JJJ       UUUUU",
+		"TTTTTTT  U     U  IIIII",
 		"|     SOJU     |",
 	} {
 		if !strings.Contains(large, expected) {
@@ -86,13 +87,13 @@ func TestFullAdminBrandBottleStaysOnOneAxis(t *testing.T) {
 		left := fullAdminBrand[index].text[:start]
 		if strings.TrimSpace(left) != "" {
 			trimmed := strings.TrimRight(left, " ")
-			if gap := len(left) - len(trimmed); gap < 5 {
-				t.Fatalf("brand row %d gap = %d, want at least 5 columns", index, gap)
+			if gap := len(left) - len(trimmed); gap < 10 {
+				t.Fatalf("brand row %d gap = %d, want at least 10 columns", index, gap)
 			}
 		}
 	}
-	if width := adminBrandWidth(fullAdminBrand); width > 57 {
-		t.Fatalf("full brand width = %d, expected it to fit a 57-column pane", width)
+	if width := adminBrandWidth(fullAdminBrand); width > 60 {
+		t.Fatalf("full brand width = %d, expected it to fit a 60-column pane", width)
 	}
 }
 

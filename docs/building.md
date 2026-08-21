@@ -29,7 +29,9 @@ soju-tui -version
 ```
 
 The setup wizard copies the architecture-matched artifact to
-`/usr/local/bin/soju-tui`. It does not copy an unchanged artifact. Use
+`/usr/local/bin/soju-tui`. It does not copy an unchanged artifact. Build output
+includes the source revision, and setup prints content fingerprints before and
+after installation so an update can be verified. Use
 `--binary /absolute/path` for a custom build or `--no-install` to keep running
 from `dist/`.
 
