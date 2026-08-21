@@ -12,6 +12,11 @@ import (
 
 var adminSocketPermissionPattern = regexp.MustCompile(`(?m)dial unix ([^\r\n]+): connect: permission denied`)
 var clientCertificateDisabledPattern = regexp.MustCompile(`(?i)client (certificate|certification) authentication.*disabled`)
+var deviceCertificateUnsupportedPattern = regexp.MustCompile(`(?i)command ["']device-certificate["'] not found`)
+
+func isDeviceCertificateUnsupported(output string) bool {
+	return deviceCertificateUnsupportedPattern.MatchString(output)
+}
 
 type SojuCtl struct {
 	Path    string
@@ -91,6 +96,14 @@ func sojuCtlFailureHint(output string) string {
 			"These authenticate downstream IRC clients; they are not the Soju server's TLS certificate.",
 			"Enable client-cert-auth true in the Soju config and restart Soju before registering devices.",
 			"Use Server TLS certificate in the TUI to inspect the certificate presented by this host.",
+		}, "\n")
+	}
+	if isDeviceCertificateUnsupported(output) {
+		return strings.Join([]string{
+			"CLIENT DEVICE CERTIFICATES ARE NOT SUPPORTED BY THIS SOJU SERVER",
+			"The running Soju version does not expose the device-certificate command.",
+			"Upgrade Soju to use downstream client-certificate administration.",
+			"This is unrelated to the host TLS certificate; use Server TLS certificate to inspect it.",
 		}, "\n")
 	}
 	return ""

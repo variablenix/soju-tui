@@ -122,3 +122,65 @@ func TestDeviceCertificateDisabledHint(t *testing.T) {
 		t.Fatalf("unexpected device-certificate hint: %q", hint)
 	}
 }
+
+func TestDeviceCertificateUnsupportedHint(t *testing.T) {
+	output := `command "device-certificate" not found (type "help" for a list of commands)`
+	hint := sojuCtlFailureHint(output)
+	if !isDeviceCertificateUnsupported(output) ||
+		!strings.Contains(hint, "NOT SUPPORTED BY THIS SOJU SERVER") ||
+		!strings.Contains(hint, "Server TLS certificate") {
+		t.Fatalf("unexpected unsupported-command hint: %q", hint)
+	}
+}
+
+func TestMenuNavigationWrapsAndSupportsHomeEnd(t *testing.T) {
+	app := newTestApp()
+	items := adminMenuItems()
+	app.admin.Cursor = 0
+	app.adminHandleKey("up", 0)
+	if app.admin.Cursor != len(items)-1 {
+		t.Fatalf("up from first item moved to %d, want %d", app.admin.Cursor, len(items)-1)
+	}
+	app.adminHandleKey("down", 0)
+	if app.admin.Cursor != 0 {
+		t.Fatalf("down from last item moved to %d, want 0", app.admin.Cursor)
+	}
+	app.adminHandleKey("end", 0)
+	if app.admin.Cursor != len(items)-1 {
+		t.Fatalf("end moved to %d, want %d", app.admin.Cursor, len(items)-1)
+	}
+	app.adminHandleKey("home", 0)
+	if app.admin.Cursor != 0 {
+		t.Fatalf("home moved to %d, want 0", app.admin.Cursor)
+	}
+	app.close()
+}
+
+func TestUnsupportedDeviceCertificateActionDoesNotExecute(t *testing.T) {
+	app := newTestApp()
+	app.admin.Capabilities = AdminCapabilities{Known: true}
+	for index, item := range adminMenuItems() {
+		if item.Kind == "device-cert-status" {
+			app.adminActivateMenuLocked(index)
+			break
+		}
+	}
+	if app.admin.Form != nil || app.admin.Busy {
+		t.Fatal("unsupported action must not open a form or execute sojuctl")
+	}
+	if len(app.admin.Output) == 0 || !strings.HasPrefix(app.admin.Output[len(app.admin.Output)-1], "UNAVAILABLE:") {
+		t.Fatalf("missing friendly unavailable message: %#v", app.admin.Output)
+	}
+	app.close()
+}
+
+func TestParseAdminCapabilities(t *testing.T) {
+	old := parseAdminCapabilities("network status\nserver status\n")
+	if !old.Known || old.DeviceCertificates {
+		t.Fatalf("unexpected old-server capabilities: %#v", old)
+	}
+	current := parseAdminCapabilities("device-certificate status\ndevice-certificate create\n")
+	if !current.Known || !current.DeviceCertificates {
+		t.Fatalf("unexpected current-server capabilities: %#v", current)
+	}
+}

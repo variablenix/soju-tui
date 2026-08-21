@@ -12,6 +12,31 @@ type AdminMenuItem struct {
 	Kind  string
 }
 
+func parseAdminCapabilities(help string) AdminCapabilities {
+	capabilities := AdminCapabilities{Known: true}
+	for _, line := range strings.Split(help, "\n") {
+		fields := strings.Fields(line)
+		if len(fields) > 0 && fields[0] == "device-certificate" {
+			capabilities.DeviceCertificates = true
+			break
+		}
+	}
+	return capabilities
+}
+
+func (a *App) adminUnsupportedReasonLocked(kind string) string {
+	if !a.admin.Capabilities.Known {
+		return ""
+	}
+	switch kind {
+	case "device-cert-status", "device-cert-create", "device-cert-delete":
+		if !a.admin.Capabilities.DeviceCertificates {
+			return "This Soju server does not expose the device-certificate command. Upgrade Soju to use downstream client-certificate administration. This is separate from the host TLS certificate; use Server TLS certificate to inspect that certificate."
+		}
+	}
+	return ""
+}
+
 var safeDisplayArg = regexp.MustCompile(`^[A-Za-z0-9_@+.,:/=-]+$`)
 
 func adminMenuItems() []AdminMenuItem {
@@ -119,12 +144,18 @@ func (a *App) adminHandleKey(key string, r rune) {
 	items := adminMenuItems()
 	switch key {
 	case "up":
-		if a.admin.Cursor > 0 {
-			a.admin.Cursor--
+		if len(items) > 0 {
+			a.admin.Cursor = (a.admin.Cursor - 1 + len(items)) % len(items)
 		}
 	case "down":
-		if a.admin.Cursor < len(items)-1 {
-			a.admin.Cursor++
+		if len(items) > 0 {
+			a.admin.Cursor = (a.admin.Cursor + 1) % len(items)
+		}
+	case "home":
+		a.admin.Cursor = 0
+	case "end":
+		if len(items) > 0 {
+			a.admin.Cursor = len(items) - 1
 		}
 	case "enter":
 		a.adminActivateMenuLocked(a.admin.Cursor)
@@ -141,6 +172,13 @@ func (a *App) adminActivateMenuLocked(cursor int) {
 		return
 	}
 	item := items[cursor]
+	if reason := a.adminUnsupportedReasonLocked(item.Kind); reason != "" {
+		a.admin.Output = append(a.admin.Output, "UNAVAILABLE: "+reason)
+		a.admin.Output = trimOutput(a.admin.Output)
+		a.admin.View = adminOutput
+		a.setStatusLocked("action unavailable on this Soju version", 0)
+		return
+	}
 	switch item.Kind {
 	case "server-status":
 		a.adminRequestReadOnlyLocked("Server status", []string{"server", "status"})
