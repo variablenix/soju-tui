@@ -196,3 +196,74 @@ func TestParseFirstSojuUsername(t *testing.T) {
 		t.Fatalf("username = %q, want ak", got)
 	}
 }
+
+func TestParseSojuUsernames(t *testing.T) {
+	output := "ak (admin): 3 networks\nalice: 1 networks\nak (admin): 3 networks\n(2 more users omitted)\n"
+	users := parseSojuUsernames(output)
+	if strings.Join(users, ",") != "ak,alice" {
+		t.Fatalf("users = %#v", users)
+	}
+}
+
+func TestUserTargetFormsReceiveDiscoverableAndCustomSelector(t *testing.T) {
+	userTargetedKinds := []string{
+		"user-update", "user-delete",
+		"network-create", "network-update", "network-delete", "network-status", "network-quote",
+		"channel-create", "channel-update", "channel-delete", "channel-status",
+		"cert-generate", "cert-fingerprint",
+		"sasl-status", "sasl-set-plain", "sasl-reset",
+		"device-cert-status", "device-cert-create", "device-cert-delete",
+	}
+	for _, kind := range userTargetedKinds {
+		if !adminFormRequiresExistingUser(kind) {
+			t.Fatalf("%s is not marked as user-targeted", kind)
+		}
+		form, err := newAdminForm(kind)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := addUserChoices(form, []string{"ak", "alice"}); err != nil {
+			t.Fatalf("%s: %v", kind, err)
+		}
+		field := &form.Fields[0]
+		if field.Kind != "user" || field.Value != "ak" || len(field.Options) != 2 {
+			t.Fatalf("%s selector = %#v", kind, field)
+		}
+		adminCycleField(field)
+		if field.Value != "alice" {
+			t.Fatalf("%s did not cycle users: %#v", kind, field)
+		}
+	}
+	for _, kind := range []string{"user-create", "server-notice", "server-debug"} {
+		if adminFormRequiresExistingUser(kind) {
+			t.Fatalf("%s unexpectedly requires an existing user", kind)
+		}
+	}
+}
+
+func TestUserTargetActionOpensWithFreshUsers(t *testing.T) {
+	app := newTestApp()
+	app.processResult(adminResult{
+		Operation: AdminOperation{FollowUpKind: "open-user-form", FormKind: "network-status", Quiet: true},
+		Output:    "ak (admin): 3 networks\nalice: 1 networks\n",
+	})
+	if app.admin.Form == nil || app.admin.Form.Kind != "network-status" {
+		t.Fatalf("form was not opened: %#v", app.admin.Form)
+	}
+	if got := app.admin.Form.Fields[0]; got.Kind != "user" || got.Value != "ak" || len(got.Options) != 2 {
+		t.Fatalf("fresh user selector = %#v", got)
+	}
+	app.close()
+}
+
+func TestUserTargetActionHandlesEmptyInstance(t *testing.T) {
+	app := newTestApp()
+	app.processResult(adminResult{
+		Operation: AdminOperation{FollowUpKind: "open-user-form", FormKind: "network-status", Quiet: true},
+		Output:    "No users configured.\n",
+	})
+	if app.admin.Form != nil || !strings.Contains(strings.Join(app.admin.Output, "\n"), "Create a user") {
+		t.Fatalf("empty-user result was not explained: form=%#v output=%#v", app.admin.Form, app.admin.Output)
+	}
+	app.close()
+}

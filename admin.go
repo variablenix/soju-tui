@@ -34,12 +34,28 @@ func parseAdminCommandHelp(help string) map[string]bool {
 var sojuUserStatusLine = regexp.MustCompile(`^([^[:space:]:]+)(?: \([^)]*\))?:`)
 
 func parseFirstSojuUsername(output string) string {
-	for _, line := range strings.Split(output, "\n") {
-		if match := sojuUserStatusLine.FindStringSubmatch(strings.TrimSpace(line)); len(match) == 2 {
-			return match[1]
-		}
+	users := parseSojuUsernames(output)
+	if len(users) > 0 {
+		return users[0]
 	}
 	return ""
+}
+
+func parseSojuUsernames(output string) []string {
+	users := make([]string, 0)
+	seen := make(map[string]bool)
+	for _, line := range strings.Split(output, "\n") {
+		match := sojuUserStatusLine.FindStringSubmatch(strings.TrimSpace(line))
+		if len(match) == 2 && !seen[match[1]] {
+			users = append(users, match[1])
+			seen[match[1]] = true
+		}
+	}
+	return users
+}
+
+func isUserStatusArgs(args []string) bool {
+	return len(args) == 2 && args[0] == "user" && args[1] == "status"
 }
 
 func (a *App) adminMenuItemsLocked() []AdminMenuItem {
@@ -61,7 +77,7 @@ var safeDisplayArg = regexp.MustCompile(`^[A-Za-z0-9_@+.,:/=-]+$`)
 func adminMenuItems() []AdminMenuItem {
 	return []AdminMenuItem{
 		{Label: "Server status", Kind: "server-status", Command: "server status"},
-		{Label: "Server TLS certificate", Kind: "server-tls-certificate"},
+		{Label: "View Soju host TLS certificate", Kind: "server-tls-certificate"},
 		{Label: "List users", Kind: "user-status", Command: "user status"},
 		{Label: "Create user", Kind: "user-create", Command: "user create"},
 		{Label: "Update user", Kind: "user-update", Command: "user update"},
@@ -200,11 +216,37 @@ func (a *App) adminActivateMenuLocked(cursor int) {
 		a.adminRequestReadOnlyLocked("List users", []string{"user", "status"})
 	case "help":
 		a.adminRequestReadOnlyLocked("BouncerServ help", []string{"help"})
-	case "device-cert-status":
-		a.adminOpenFormLocked(item.Kind)
 	default:
-		a.adminOpenFormLocked(item.Kind)
+		if adminFormRequiresExistingUser(item.Kind) {
+			a.adminLoadUsersForFormLocked(item.Kind)
+		} else {
+			a.adminOpenFormLocked(item.Kind)
+		}
 	}
+}
+
+func adminFormRequiresExistingUser(kind string) bool {
+	switch kind {
+	case "user-update", "user-delete",
+		"network-create", "network-update", "network-delete", "network-status", "network-quote",
+		"channel-create", "channel-update", "channel-delete", "channel-status",
+		"cert-generate", "cert-fingerprint",
+		"sasl-status", "sasl-set-plain", "sasl-reset",
+		"device-cert-status", "device-cert-create", "device-cert-delete":
+		return true
+	default:
+		return false
+	}
+}
+
+func (a *App) adminLoadUsersForFormLocked(kind string) {
+	op := makeAdminOperation(a.backend.Config, "Load Soju users", []string{"user", "status"}, nil, false, nil)
+	op.FollowUpKind = "open-user-form"
+	op.FormKind = kind
+	op.Quiet = true
+	a.mu.Unlock()
+	a.requestOperation(op)
+	a.mu.Lock()
 }
 
 func (a *App) adminRequestReadOnlyLocked(summary string, args []string) {
@@ -235,6 +277,44 @@ func (a *App) adminOpenFormLocked(kind string) {
 	a.admin.View = adminForm
 	a.admin.Confirm = nil
 	a.setStatusLocked("Enter advances · Space cycles choices · Ctrl-S previews · Esc cancels", 0)
+}
+
+func (a *App) adminOpenFormWithUsersLocked(kind string, users []string) error {
+	form, err := newAdminForm(kind)
+	if err != nil {
+		return err
+	}
+	if err := addUserChoices(form, users); err != nil {
+		return err
+	}
+	a.admin.Form = form
+	a.admin.View = adminForm
+	a.admin.Confirm = nil
+	a.setStatusLocked("Space cycles discovered users · typing selects a specific username", 0)
+	return nil
+}
+
+func addUserChoices(form *AdminForm, users []string) error {
+	if len(users) == 0 {
+		return errors.New("no Soju users available")
+	}
+	targetLabel := "User"
+	if form.Kind == "user-update" || form.Kind == "user-delete" {
+		targetLabel = "Username"
+	}
+	for index := range form.Fields {
+		field := &form.Fields[index]
+		if field.Label != targetLabel {
+			continue
+		}
+		field.Kind = "user"
+		field.Value = users[0]
+		field.Original = users[0]
+		field.Options = append([]string(nil), users...)
+		field.Help = "Space cycles all discovered users; Backspace/type enters a specific username"
+		return nil
+	}
+	return fmt.Errorf("form %q has no %s field", form.Kind, targetLabel)
 }
 
 func newAdminForm(kind string) (*AdminForm, error) {
@@ -373,7 +453,7 @@ func (a *App) adminFormKeyLocked(key string, r rune) {
 			form.Cursor--
 		}
 	case "backspace":
-		if field.Kind == "text" {
+		if field.Kind == "text" || field.Kind == "user" {
 			runes := []rune(field.Value)
 			if len(runes) > 0 {
 				field.Value = string(runes[:len(runes)-1])
@@ -398,7 +478,7 @@ func (a *App) adminFormKeyLocked(key string, r rune) {
 		a.admin.View = adminDashboard
 		a.setStatusLocked("form cancelled", 3e9)
 	default:
-		if r != 0 && field.Kind == "text" {
+		if r != 0 && (field.Kind == "text" || field.Kind == "user") {
 			field.Value += string(r)
 		}
 	}
@@ -425,6 +505,14 @@ func adminCycleField(field *AdminField) {
 		for i, value := range field.Options {
 			if field.Value == value {
 				field.Value = field.Options[(i+1)%len(field.Options)]
+				return
+			}
+		}
+		field.Value = field.Options[0]
+	case "user":
+		for index, value := range field.Options {
+			if field.Value == value {
+				field.Value = field.Options[(index+1)%len(field.Options)]
 				return
 			}
 		}

@@ -46,6 +46,7 @@ type AdminOperation struct {
 	TargetUser            string
 	TargetNetwork         string
 	CapabilityUser        string
+	FormKind              string
 	Quiet                 bool
 }
 
@@ -65,6 +66,7 @@ type AdminState struct {
 	LastRefresh   []string
 	LastOperation *AdminOperation
 	Capabilities  AdminCapabilities
+	Users         []string
 }
 
 type AdminCapabilities struct {
@@ -174,6 +176,7 @@ func (a *App) processResult(result adminResult) {
 	}
 	if result.Operation.FollowUpKind == "startup-user-status" {
 		if result.Err == nil {
+			a.admin.Users = parseSojuUsernames(output)
 			if username := parseFirstSojuUsername(output); username != "" {
 				op := makeAdminOperation(a.backend.Config, "Detect per-user Soju capabilities", []string{"user", "run", username, "help"}, nil, false, nil)
 				op.FollowUpKind = "startup-user-help"
@@ -219,6 +222,25 @@ func (a *App) processResult(result adminResult) {
 		a.continueStartupLocked(op)
 		return
 	}
+	if result.Operation.FollowUpKind == "open-user-form" && result.Err == nil {
+		users := parseSojuUsernames(output)
+		a.admin.Users = users
+		if len(users) == 0 {
+			a.admin.Output = append(a.admin.Output, "No Soju users exist. Create a user before opening this action.")
+			a.admin.View = adminOutput
+			a.setStatusLocked("no Soju users available", 0)
+			a.admin.Output = trimOutput(a.admin.Output)
+			return
+		}
+		if err := a.adminOpenFormWithUsersLocked(result.Operation.FormKind, users); err != nil {
+			a.admin.Output = append(a.admin.Output, "ERROR: "+err.Error())
+			a.admin.View = adminOutput
+			a.setStatusLocked("could not open user-targeted action", 0)
+			a.admin.Output = trimOutput(a.admin.Output)
+			return
+		}
+		return
+	}
 	if result.Err != nil {
 		a.admin.Output = append(a.admin.Output, "ERROR: "+redactText(result.Err.Error(), result.Operation.Secrets))
 		if hint := sojuCtlFailureHint(output); hint != "" {
@@ -226,6 +248,9 @@ func (a *App) processResult(result adminResult) {
 		}
 		a.setStatusLocked("sojuctl operation failed", 0)
 	} else {
+		if isUserStatusArgs(result.Operation.Args) {
+			a.admin.Users = parseSojuUsernames(output)
+		}
 		if result.Operation.CapabilityUser != "" {
 			op := makeAdminOperation(a.backend.Config, "Refresh per-user Soju capabilities", []string{"user", "run", result.Operation.CapabilityUser, "help"}, nil, false, nil)
 			op.FollowUpKind = "post-create-user-help"
