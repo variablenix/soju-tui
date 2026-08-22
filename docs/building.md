@@ -78,6 +78,20 @@ for compatible features, and major for incompatible changes. A failed run does
 not expose a partially uploaded public release, and an existing tag or release
 cannot be overwritten.
 
+### When to cut a release
+
+Cut a release when `main` contains a tested change that operators should
+install. Use a patch release for compatible bug, security, compatibility, or
+installer fixes; a minor release for backward-compatible features; and a major
+release for incompatible behavior. Accumulated maintenance may be grouped into
+one release.
+
+Documentation, screenshot, or CI-only changes normally do not require a new
+binary release. There is no automatic schedule and merging a pull request does
+not publish anything: a maintainer deliberately starts the Release workflow
+after all protected checks on `main` are green and no release-blocking issue is
+known.
+
 ## Optional local release build
 
 A local production build requires a clean working tree and an exact signed
