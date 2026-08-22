@@ -11,7 +11,9 @@ covered by regression fixtures. See [Soju version compatibility](compatibility.m
 for the tested package versions and limits.
 
 Certificate-related menu entries use blue as an informational category color.
-Red is reserved for actual errors and confirmation warnings.
+Confirmation dialogs use green for additions, blue for changes, and red only
+for destructive actions such as deletion, clearing, resetting, or replacement.
+Outside confirmations, red remains reserved for actual errors.
 
 The sidebar identifies the program as **Managing Soju via sojuctl**. This
 describes the active control path accurately without implying that the TUI opens

@@ -163,6 +163,7 @@ func sojuTUIHelp() []string {
 		"",
 		"SAFETY",
 		"  Read-only actions run directly. Every mutation requires confirmation; destructive or high-risk actions require an exact phrase.",
+		"  Confirmation color describes the effect: green adds, blue changes, and red deletes, clears, resets, or replaces.",
 		"  Passwords and sensitive network commands are redacted. Normal TUI operation never invokes sudo or a shell.",
 		"",
 		"UPSTREAM SOJU DOCUMENTATION",
@@ -1502,6 +1503,12 @@ func buildAdminOperation(config string, form *AdminForm) (AdminOperation, error)
 	op := makeAdminOperation(config, summary, args, refresh, mutating, secrets)
 	op.Preflight = append([]string(nil), preflight...)
 	switch form.Kind {
+	case "user-create", "network-create", "channel-create", "cert-generate", "device-cert-create":
+		op.ConfirmationImpact = adminConfirmationAddition
+	case "user-delete", "network-delete", "channel-delete", "sasl-reset", "device-cert-delete":
+		op.ConfirmationImpact = adminConfirmationDestructive
+	}
+	switch form.Kind {
 	case "network-update-lookup":
 		op.FollowUpKind = "network-update"
 		op.TargetUser = values["User"]
@@ -1529,6 +1536,7 @@ func buildAdminOperation(config string, form *AdminForm) (AdminOperation, error)
 		switch {
 		case values["Explicitly clear"] != "":
 			op.ConfirmPhrase = "CLEAR NETWORK SETTING"
+			op.ConfirmationImpact = adminConfirmationDestructive
 		case values["Server TLS fingerprint"] != "":
 			op.ConfirmPhrase = "CHANGE SERVER TLS PIN"
 		case values["Connect command"] != "" || values["Additional connect commands"] != "":
@@ -1539,6 +1547,7 @@ func buildAdminOperation(config string, form *AdminForm) (AdminOperation, error)
 	case "user-identity-update":
 		if values["Explicitly clear"] != "" {
 			op.ConfirmPhrase = "CLEAR USER IDENTITY SETTING"
+			op.ConfirmationImpact = adminConfirmationDestructive
 		}
 	case "channel-delete":
 		op.ConfirmPhrase = "DELETE CHANNEL " + values["Channel"]

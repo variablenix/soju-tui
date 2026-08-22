@@ -34,6 +34,14 @@ type AdminForm struct {
 	Cursor     int
 }
 
+type AdminConfirmationImpact uint8
+
+const (
+	adminConfirmationChange AdminConfirmationImpact = iota
+	adminConfirmationAddition
+	adminConfirmationDestructive
+)
+
 type AdminOperation struct {
 	Summary               string
 	Args                  []string
@@ -44,6 +52,7 @@ type AdminOperation struct {
 	Preview               string
 	NeedsSojuConfirmation bool
 	ConfirmPhrase         string
+	ConfirmationImpact    AdminConfirmationImpact
 	FollowUpKind          string
 	TargetUser            string
 	TargetNetwork         string
@@ -354,6 +363,7 @@ func (a *App) processResult(result adminResult) {
 		}
 		if result.Err == nil && isCertificateFingerprintReport(output) {
 			planned.CertificateState = "existing"
+			planned.ConfirmationImpact = adminConfirmationDestructive
 			planned.CertificateReport = normalizeCertificateReport(output)
 			a.admin.Output = append(a.admin.Output,
 				"EXISTING UPSTREAM SASL CERTIFICATE FOUND",
@@ -369,6 +379,7 @@ func (a *App) processResult(result adminResult) {
 		}
 		if isCertFPNotConfigured(output) {
 			planned.CertificateState = "absent"
+			planned.ConfirmationImpact = adminConfirmationAddition
 			planned.CertificateReport = ""
 			a.admin.Output = append(a.admin.Output,
 				"No existing upstream SASL CertFP certificate was found for this user and network.",
@@ -472,6 +483,7 @@ func (a *App) processResult(result adminResult) {
 			if args, username, ok := parseUserDeleteConfirmation(output, result.Operation.TargetUser); ok {
 				followUp := makeAdminOperation(a.backend.Config, "Confirm deletion of user "+username, args, []string{"user", "status"}, true, nil)
 				followUp.ConfirmPhrase = "DELETE USER " + username
+				followUp.ConfirmationImpact = adminConfirmationDestructive
 				a.admin.Confirm = &AdminConfirmation{Operation: followUp}
 				a.admin.View = adminOutput
 				a.setStatusLocked("soju requires a second deletion confirmation; type the displayed phrase", 0)

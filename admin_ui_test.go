@@ -8,6 +8,31 @@ import (
 	"github.com/gdamore/tcell/v2"
 )
 
+func TestAdminConfirmationPresentationUsesImpactColors(t *testing.T) {
+	tests := []struct {
+		name       string
+		impact     AdminConfirmationImpact
+		title      string
+		background tcell.Color
+	}{
+		{name: "addition", impact: adminConfirmationAddition, title: "CONFIRM ADDITION", background: tcell.ColorDarkGreen},
+		{name: "change", impact: adminConfirmationChange, title: "CONFIRM ADMINISTRATIVE CHANGE", background: tcell.ColorDarkBlue},
+		{name: "destructive", impact: adminConfirmationDestructive, title: "CONFIRM DESTRUCTIVE ACTION", background: tcell.ColorDarkRed},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			presentation := adminConfirmationPresentationFor(test.impact)
+			if presentation.title != test.title || presentation.background != test.background {
+				t.Fatalf("presentation = %#v, want title %q and background %v", presentation, test.title, test.background)
+			}
+			_, background, _ := presentation.heading.Decompose()
+			if background != test.background {
+				t.Fatalf("heading background = %v, want %v", background, test.background)
+			}
+		})
+	}
+}
+
 func TestAdminUIUsesAdministrationIdentityAndResponsiveBrand(t *testing.T) {
 	app := newTestApp()
 	defer app.close()
