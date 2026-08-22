@@ -1,6 +1,6 @@
 # soju-tui
 
-![soju-tui — IRC bouncer administration client](soju-tui.png)
+![soju-tui — IRC bouncer administration client](assets/branding/soju-tui.png)
 
 `soju-tui` is an administration-only terminal frontend for the [soju IRC
 bouncer](https://soju.im/). It manages the running instance through `sojuctl`;
@@ -27,7 +27,7 @@ it is not an IRC chat client and never opens channels or displays messages.
   executables. Running those executables requires neither the Go toolchain nor
   ncurses; a running Soju instance and `sojuctl` are still required.
 
-![Soju-TUI administration interface](./soju-tui-screen.png?raw=true&v=20260821-3)
+![Soju-TUI administration interface](assets/screenshots/soju-tui-screen.png)
 
 ## Quick start
 
