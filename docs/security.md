@@ -21,10 +21,12 @@ confirmation.
 Production setup rejects development, dirty, and unknown builds. It verifies
 repository artifacts against `dist/SHA256SUMS`, compares the installed copy by
 SHA-256 after atomic replacement, and records release revision/toolchain data in
-`dist/BUILDINFO`. Checksums detect corruption; release authenticity still
-depends on the trusted Gitea transport, exact release tag, and GitHub
-mirror/release access controls. A GitHub Actions result validates a mirrored
-commit after it arrives; it does not gate the authoritative Gitea push.
+`dist/BUILDINFO`. Checksums detect corruption; release authenticity also
+depends on trusted GitHub transport, branch protection, workflow integrity,
+and release access controls. The manually dispatched release workflow receives
+repository contents write permission only in its publishing job and uses the
+short-lived GitHub Actions token. It does not require a stored token or private
+GPG key. Local release builds continue to require a signed tag.
 
 ## Command execution
 

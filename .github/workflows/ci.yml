@@ -74,6 +74,9 @@ jobs:
       - name: Check shell helpers
         run: shellcheck scripts/*.sh
 
+      - name: Validate GitHub workflows
+        run: go run github.com/rhysd/actionlint/cmd/actionlint@v1.7.7
+
       - name: Build static Linux artifacts
         run: ./scripts/build.sh --target all --version ci-${{ github.sha }}
 

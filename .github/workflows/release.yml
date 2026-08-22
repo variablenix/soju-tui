@@ -1,0 +1,225 @@
+name: Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Version without the v prefix (for example, 0.4.0)
+        required: true
+        type: string
+      prerelease:
+        description: Publish as a prerelease
+        required: true
+        default: false
+        type: boolean
+
+concurrency:
+  group: soju-tui-release
+  cancel-in-progress: false
+
+env:
+  GOTOOLCHAIN: local
+
+jobs:
+  verify:
+    name: Verify release source
+    if: ${{ github.server_url == 'https://github.com' }}
+    permissions:
+      contents: read
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+
+      - name: Set up Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Require main and validate version
+        shell: bash
+        env:
+          RELEASE_VERSION: ${{ inputs.version }}
+        run: |
+          set -euo pipefail
+          [[ "$GITHUB_REF" == "refs/heads/main" ]] || {
+            echo "Run releases from the main branch, not $GITHUB_REF" >&2
+            exit 2
+          }
+          [[ "$RELEASE_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+([.-][A-Za-z0-9][A-Za-z0-9.-]*)?$ ]] || {
+            echo "Version must look like 0.4.0 or 0.4.0-rc.1 (without a v prefix)" >&2
+            exit 2
+          }
+
+      - name: Check formatting
+        shell: bash
+        run: |
+          files="$(gofmt -l .)"
+          if [[ -n "$files" ]]; then
+            echo "The following Go files are not formatted with gofmt:"
+            echo "$files"
+            exit 1
+          fi
+
+      - name: Download and verify modules
+        run: |
+          go mod download
+          go mod verify
+
+      - name: Run tests with race detection
+        run: go test -race -count=1 ./...
+
+      - name: Enforce coverage floor
+        run: ./scripts/check-coverage.sh
+
+      - name: Run staticcheck
+        run: go run honnef.co/go/tools/cmd/staticcheck@v0.8.1 ./...
+
+      - name: Run gosec
+        run: go run github.com/securego/gosec/v2/cmd/gosec@v2.28.0 ./...
+
+      - name: Check known vulnerabilities
+        run: go run golang.org/x/vuln/cmd/govulncheck@v1.7.0 ./...
+
+      - name: Check shell helpers
+        run: shellcheck scripts/*.sh
+
+      - name: Validate GitHub workflows
+        run: go run github.com/rhysd/actionlint/cmd/actionlint@v1.7.7
+
+  soju-compatibility:
+    name: Verify release compatibility
+    if: ${{ github.server_url == 'https://github.com' }}
+    permissions:
+      contents: read
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+
+      - name: Set up Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Test real Soju v0.9.0 and v0.10.1 instances
+        run: ./scripts/test-soju-compat.sh
+
+  publish:
+    name: Publish GitHub release
+    if: ${{ github.server_url == 'https://github.com' }}
+    needs:
+      - verify
+      - soju-compatibility
+    permissions:
+      contents: write
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Set up Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Validate unused version and tag
+        id: release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_VERSION: ${{ inputs.version }}
+        run: |
+          set -euo pipefail
+          [[ "$GITHUB_REF" == "refs/heads/main" ]] || {
+            echo "Run releases from the main branch, not $GITHUB_REF" >&2
+            exit 2
+          }
+          [[ "$RELEASE_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+([.-][A-Za-z0-9][A-Za-z0-9.-]*)?$ ]] || {
+            echo "Version must look like 0.4.0 or 0.4.0-rc.1 (without a v prefix)" >&2
+            exit 2
+          }
+          tag="v$RELEASE_VERSION"
+          if git ls-remote --exit-code --tags origin "refs/tags/$tag" >/dev/null 2>&1; then
+            echo "Tag $tag already exists" >&2
+            exit 2
+          fi
+          if gh release view "$tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "Release $tag already exists" >&2
+            exit 2
+          fi
+          printf 'version=%s\n' "$RELEASE_VERSION" >>"$GITHUB_OUTPUT"
+          printf 'tag=%s\n' "$tag" >>"$GITHUB_OUTPUT"
+
+      - name: Create local release tag
+        shell: bash
+        env:
+          RELEASE_TAG: ${{ steps.release.outputs.tag }}
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git tag -a "$RELEASE_TAG" -m "soju-tui $RELEASE_TAG"
+
+      - name: Build release artifacts
+        env:
+          RELEASE_VERSION: ${{ steps.release.outputs.version }}
+        run: ./scripts/build.sh --target all --version "$RELEASE_VERSION" --release --github-actions-release
+
+      - name: Verify release checksums
+        working-directory: dist
+        run: sha256sum -c SHA256SUMS
+
+      - name: Publish release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ steps.release.outputs.tag }}
+          PRERELEASE: ${{ inputs.prerelease }}
+        run: |
+          set -euo pipefail
+          args=(
+            "$RELEASE_TAG"
+            dist/soju-tui-linux-amd64
+            dist/soju-tui-linux-arm64
+            dist/SHA256SUMS
+            dist/BUILDINFO
+            --repo "$GITHUB_REPOSITORY"
+            --target "$GITHUB_SHA"
+            --title "soju-tui $RELEASE_TAG"
+            --generate-notes
+            --fail-on-no-commits
+          )
+          if [[ "$PRERELEASE" == true ]]; then
+            args+=(--prerelease)
+          else
+            args+=(--latest)
+          fi
+          gh release create "${args[@]}"
+
+      - name: Summarize release
+        shell: bash
+        env:
+          RELEASE_TAG: ${{ steps.release.outputs.tag }}
+        run: |
+          {
+            echo "## Published $RELEASE_TAG"
+            echo
+            echo "The tag, Linux binaries, SHA256SUMS, and BUILDINFO were published by GitHub Actions."
+          } >>"$GITHUB_STEP_SUMMARY"
