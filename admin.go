@@ -142,11 +142,13 @@ func sojuTUIHelp() []string {
 		"Administration-only frontend for a running Soju instance through sojuctl. It manages bouncer configuration and runtime state.",
 		"",
 		"NAVIGATION",
-		"  Up/Down: select an action     Home/End: first or last action",
+		"  Arrow keys, Vim H/J/K/L, and W/A/S/D navigate menus and help.",
+		"  Up/K/W and Down/J/S move; Left/H/A backs; Right/L/D opens.",
 		"  PgUp/PgDn: scroll output      Enter: open or advance",
 		"  Space: cycle users, networks, channels, and choices",
 		"  Ctrl-S: preview a form       Esc: cancel or go back",
 		"  ? or F1: this help           q/Q/Ctrl-C/Ctrl-Q: confirm exit",
+		"  Letter navigation is inactive in forms and confirmations so typed input stays literal.",
 		"",
 		"USERS",
 		"  List or inspect users; create, update, disable, promote, or delete an account; update IRC identity defaults.",
@@ -249,6 +251,7 @@ func (a *App) adminHandleKeyWithViewport(key string, r rune, helpWidth, helpHeig
 		a.adminFormKeyLocked(key, r)
 		return
 	}
+	key = adminNavigationAlias(key)
 	if a.admin.HelpOpen {
 		a.adminHelpKeyLocked(key, helpWidth, helpHeight)
 		return
@@ -295,12 +298,31 @@ func (a *App) adminHandleKeyWithViewport(key string, r rune, helpWidth, helpHeig
 		if len(items) > 0 {
 			a.admin.Cursor = len(items) - 1
 		}
-	case "enter":
+	case "enter", "right":
 		a.adminActivateMenuLocked(a.admin.Cursor)
-	case "esc":
+	case "esc", "left":
 		a.admin.View = adminDashboard
 	case "r":
 		a.adminRefreshLocked()
+	}
+}
+
+// adminNavigationAlias translates letter keys only after forms and
+// confirmations have consumed their input. Keeping the translation at this
+// layer prevents navigation shortcuts from changing typed usernames,
+// passwords, commands, or exact confirmation phrases.
+func adminNavigationAlias(key string) string {
+	switch key {
+	case "k", "K", "w", "W":
+		return "up"
+	case "j", "J", "s", "S":
+		return "down"
+	case "h", "H", "a", "A":
+		return "left"
+	case "l", "L", "d", "D":
+		return "right"
+	default:
+		return key
 	}
 }
 
@@ -355,7 +377,7 @@ func (a *App) adminShowHelpLocked() {
 	a.admin.HelpOpen = true
 	a.admin.HelpScroll = 0
 	a.admin.View = adminOutput
-	a.setStatusLocked("Soju-TUI help · Up/Down scrolls · Esc or ? closes", 0)
+	a.setStatusLocked("Soju-TUI help · arrows/HJKL/WASD scroll · Esc or ? closes", 0)
 }
 
 func (a *App) adminHelpKeyLocked(key string, width, height int) {
@@ -364,7 +386,7 @@ func (a *App) adminHelpKeyLocked(key string, width, height int) {
 		a.admin.HelpScroll = last
 	}
 	switch key {
-	case "help", "?", "esc":
+	case "help", "?", "esc", "left":
 		a.admin.HelpOpen = false
 		a.admin.HelpScroll = 0
 		a.setStatusLocked("ready", 0)

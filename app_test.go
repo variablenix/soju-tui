@@ -158,6 +158,107 @@ func TestMenuNavigationWrapsAndSupportsHomeEnd(t *testing.T) {
 	app.close()
 }
 
+func TestAdminNavigationAliasMapping(t *testing.T) {
+	tests := map[string]string{
+		"k": "up", "K": "up", "w": "up", "W": "up",
+		"j": "down", "J": "down", "s": "down", "S": "down",
+		"h": "left", "H": "left", "a": "left", "A": "left",
+		"l": "right", "L": "right", "d": "right", "D": "right",
+		"enter": "enter", "pageup": "pageup",
+	}
+	for input, want := range tests {
+		if got := adminNavigationAlias(input); got != want {
+			t.Errorf("adminNavigationAlias(%q) = %q, want %q", input, got, want)
+		}
+	}
+}
+
+func TestMenuAndHelpSupportAlternateNavigation(t *testing.T) {
+	app := newTestApp()
+	defer app.close()
+	items := adminMenuItems()
+
+	for _, key := range []string{"k", "K", "w", "W"} {
+		app.admin.Cursor = 1
+		app.adminHandleKey(key, []rune(key)[0])
+		if app.admin.Cursor != 0 {
+			t.Fatalf("%q moved cursor to %d, want 0", key, app.admin.Cursor)
+		}
+	}
+	for _, key := range []string{"j", "J", "s", "S"} {
+		app.admin.Cursor = 1
+		app.adminHandleKey(key, []rune(key)[0])
+		if app.admin.Cursor != 2 {
+			t.Fatalf("%q moved cursor to %d, want 2", key, app.admin.Cursor)
+		}
+	}
+
+	helpIndex := -1
+	for index, item := range items {
+		if item.Kind == "tui-help" {
+			helpIndex = index
+			break
+		}
+	}
+	if helpIndex < 0 {
+		t.Fatal("Soju-TUI help item is missing")
+	}
+	for _, pair := range [][2]string{{"l", "h"}, {"L", "H"}, {"d", "a"}, {"D", "A"}} {
+		app.admin.Cursor = helpIndex
+		app.adminHandleKey(pair[0], []rune(pair[0])[0])
+		if !app.admin.HelpOpen {
+			t.Fatalf("%q did not open the selected help action", pair[0])
+		}
+		app.adminHandleKey(pair[1], []rune(pair[1])[0])
+		if app.admin.HelpOpen {
+			t.Fatalf("%q did not close help", pair[1])
+		}
+	}
+
+	app.admin.Cursor = helpIndex
+	handleAdminKeyEvent(app, tcell.NewEventKey(tcell.KeyRight, 0, tcell.ModNone))
+	if !app.admin.HelpOpen {
+		t.Fatal("Right arrow did not open the selected help action")
+	}
+	handleAdminKeyEvent(app, tcell.NewEventKey(tcell.KeyLeft, 0, tcell.ModNone))
+	if app.admin.HelpOpen {
+		t.Fatal("Left arrow did not close help")
+	}
+
+	app.adminHandleKey("?", '?')
+	for _, test := range []struct {
+		key  string
+		want int
+	}{{"j", 1}, {"k", 0}, {"s", 1}, {"w", 0}} {
+		app.adminHandleKey(test.key, []rune(test.key)[0])
+		if app.admin.HelpScroll != test.want {
+			t.Fatalf("help key %q set scroll to %d, want %d", test.key, app.admin.HelpScroll, test.want)
+		}
+	}
+}
+
+func TestAlternateNavigationLettersRemainLiteralInput(t *testing.T) {
+	app := newTestApp()
+	defer app.close()
+	const input = "hjklwasdHJKLWASD"
+	app.admin.Form = &AdminForm{Fields: []AdminField{{Kind: "text"}}}
+	for _, char := range input {
+		app.adminHandleKey(string(char), char)
+	}
+	if got := app.admin.Form.Fields[0].Value; got != input {
+		t.Fatalf("form value = %q, want %q", got, input)
+	}
+
+	app.admin.Form = nil
+	app.admin.Confirm = &AdminConfirmation{Operation: AdminOperation{ConfirmPhrase: input}}
+	for _, char := range input {
+		app.adminHandleKey(string(char), char)
+	}
+	if got := string(app.admin.Confirm.Input); got != input {
+		t.Fatalf("confirmation input = %q, want %q", got, input)
+	}
+}
+
 func TestMainOutputPagingDoesNotChangeMenuSelection(t *testing.T) {
 	app := newTestApp()
 	defer app.close()

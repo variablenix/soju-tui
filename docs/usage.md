@@ -34,16 +34,24 @@ The help screen includes the upstream Soju project, manual, `sojuctl` manual,
 and source URLs as plain text. It never launches a browser, invokes a shell, or
 fetches remote content.
 
-Inside help, use `↑`/`↓` for line scrolling, `Page Up`/`Page Down` for larger
-steps, `Home`/`End` to jump, and `Esc` or `?` to close it. Scrolling stops at
-the first or last full page, so the help pane does not advance into blank
-space.
+Inside help, use `↑`/`↓`, Vim `k`/`j`, or `w`/`s` for line scrolling;
+`Page Up`/`Page Down` for larger steps; `Home`/`End` to jump; and `←`, `h`,
+`a`, `Esc`, or `?` to close it. Scrolling stops at the first or last full page,
+so the help pane does not advance into blank space.
 
 On the main output screen, use `Page Up` to view older output and `Page Down`
 to move toward the newest output. `Shift`+`↑`/`↓` provides an additional
 scroll shortcut in terminals that preserve modified arrow keys. The footer
 changes to `PgUp older`/`PgDn newer` while viewing history. The menu's ordinary
-`↑`/`↓` selection remains available at all times.
+`↑`/`↓`, `k`/`j`, and `w`/`s` selection remains available at all times.
+
+Vim `h`/`j`/`k`/`l` and WASD `a`/`s`/`w`/`d` are case-insensitive navigation
+aliases on menus and the help viewer. On the main menu, left (`←`, `h`, or
+`a`) goes back and right (`→`, `l`, or `d`) opens the selected action. These
+letter aliases are deliberately inactive in forms and confirmation dialogs, so
+usernames, passwords, raw commands, notices, and confirmation phrases are
+entered literally. Up/Down arrows, `Tab`, and `Shift-Tab` continue to navigate
+forms.
 
 ## All users or a specific user
 
@@ -140,7 +148,8 @@ and production Let's Encrypt guidance.
 
 ## Controls
 
-- `↑`/`↓` — move through actions and wrap at either end
+- `↑`/`↓`, `k`/`j`, or `w`/`s` — move through actions and wrap at either end
+- `←`/`→`, `h`/`l`, or `a`/`d` — go back or open the selected menu action
 - `Page Up`/`Page Down` — scroll the main output older/newer
 - `Shift`+`↑`/`↓` — scroll main output when supported by the terminal
 - `Home`/`End` — jump to the first or last action
@@ -154,3 +163,6 @@ and production Let's Encrypt guidance.
 - `r` — repeat the last read-only refresh
 - `?` or `F1` — open built-in Soju-TUI help
 - `q`, `Q`, `Ctrl-C`, or `Ctrl-Q` — open exit confirmation
+
+Vim and WASD letter aliases apply only to menus and help. Forms and
+confirmations always treat those letters as input.
