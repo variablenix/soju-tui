@@ -119,7 +119,7 @@ Soju uses three unrelated certificate concepts:
 
 - **View Soju host TLS certificate** reads the public certificate from the
   config's `tls` line. It shows the configured domain (for example
-  `soju.kode.im`), subject, issuer such as Let's Encrypt, DNS names, validity,
+  `soju.example.com`), subject, issuer such as Let's Encrypt, DNS names, validity,
   hostname match, SHA-256 fingerprint, and chain length. The private key is
   never read.
 - **Upstream SASL certificate / CertFP** authenticates one user's connection to
