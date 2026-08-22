@@ -22,6 +22,9 @@ func TestAdminUserCreateUsesArgvAndRedactsPassword(t *testing.T) {
 	if !op.Mutating || len(op.Args) == 0 {
 		t.Fatalf("unexpected operation: %#v", op)
 	}
+	if op.ConfirmationImpact != adminConfirmationAddition {
+		t.Fatalf("create-user confirmation impact = %v, want addition", op.ConfirmationImpact)
+	}
 	if op.CapabilityUser != "alice" {
 		t.Fatalf("created user was not retained for capability refresh: %#v", op)
 	}
@@ -321,6 +324,9 @@ func TestResetSASLRequiresTypedConfirmation(t *testing.T) {
 	if op.ConfirmPhrase != "RESET SASL" {
 		t.Fatalf("confirmation phrase = %q", op.ConfirmPhrase)
 	}
+	if op.ConfirmationImpact != adminConfirmationDestructive {
+		t.Fatalf("reset-SASL confirmation impact = %v, want destructive", op.ConfirmationImpact)
+	}
 }
 
 func TestSetSASLPlainRequiresTypedConfirmationAndRedactsPassword(t *testing.T) {
@@ -462,6 +468,9 @@ func TestNetworkSupportsRepeatedAndClearedConnectCommands(t *testing.T) {
 	}
 	if op.ConfirmPhrase != "CLEAR NETWORK SETTING" {
 		t.Fatalf("clear confirmation = %q", op.ConfirmPhrase)
+	}
+	if op.ConfirmationImpact != adminConfirmationDestructive {
+		t.Fatalf("clear-network confirmation impact = %v, want destructive", op.ConfirmationImpact)
 	}
 }
 
@@ -653,6 +662,9 @@ func TestNetworkUpdatePrefillSubmitsOnlyChanges(t *testing.T) {
 	op, err := buildAdminOperation("/etc/soju/config", form)
 	if err != nil {
 		t.Fatal(err)
+	}
+	if op.ConfirmationImpact != adminConfirmationChange {
+		t.Fatalf("network-update confirmation impact = %v, want change", op.ConfirmationImpact)
 	}
 	joined := strings.Join(op.Args, "\x00")
 	if !strings.Contains(joined, "-nick\x00alice_") {

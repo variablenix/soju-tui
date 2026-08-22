@@ -522,6 +522,9 @@ func TestCertificatePreflightRequiresReplacementPhraseWhenExisting(t *testing.T)
 	if app.admin.Confirm.Operation.CertificateState != "existing" || app.admin.Confirm.Operation.CertificateReport == "" {
 		t.Fatalf("existing certificate guard state = %#v", app.admin.Confirm.Operation)
 	}
+	if app.admin.Confirm.Operation.ConfirmationImpact != adminConfirmationDestructive {
+		t.Fatalf("existing certificate impact = %v, want destructive", app.admin.Confirm.Operation.ConfirmationImpact)
+	}
 	output := strings.Join(app.admin.Output, "\n")
 	if !strings.Contains(output, "EXISTING UPSTREAM SASL CERTIFICATE FOUND") || !strings.Contains(output, "AA:BB:CC") || !strings.Contains(output, "Let's Encrypt files are not touched") {
 		t.Fatalf("existing certificate warning = %q", output)
@@ -543,6 +546,9 @@ func TestCertificatePreflightRequiresGenerationPhraseWhenAbsent(t *testing.T) {
 	}
 	if app.admin.Confirm.Operation.CertificateState != "absent" {
 		t.Fatalf("absent certificate guard state = %#v", app.admin.Confirm.Operation)
+	}
+	if app.admin.Confirm.Operation.ConfirmationImpact != adminConfirmationAddition {
+		t.Fatalf("new certificate impact = %v, want addition", app.admin.Confirm.Operation.ConfirmationImpact)
 	}
 	if !strings.Contains(strings.Join(app.admin.Output, "\n"), "No existing upstream SASL CertFP") {
 		t.Fatalf("missing no-certificate explanation: %#v", app.admin.Output)

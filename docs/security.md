@@ -51,6 +51,12 @@ server-wide notices, limit overrides, and explicit clears also use typed
 phrases. Lower-risk creates and edits still require a `y` confirmation after
 the redacted argument preview.
 
+Confirmation color communicates the operation's effect, not whether approval
+can be skipped: green adds an object or credential, blue changes state, and red
+deletes, clears, resets, or replaces existing state. Every color still requires
+explicit approval, and high-risk additions such as administrator or client
+certificate registration retain their exact typed phrase.
+
 ## Secrets
 
 The saved profile contains only config and executable paths and is created with
