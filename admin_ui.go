@@ -401,28 +401,58 @@ func drawAdminConfirmation(screen tcell.Screen, app *App, x, width, y, height in
 		boxHeight = 14
 	}
 	boxY := y + (height-boxHeight)/2
-	background := styleError.Background(tcell.ColorDarkRed)
+	presentation := adminConfirmationPresentationFor(confirmation.Operation.ConfirmationImpact)
+	background := presentation.heading
 	for row := 0; row < boxHeight; row++ {
 		putClipped(screen, x, boxY+row, boxWidth, " ", background)
 	}
-	putClipped(screen, x+2, boxY+1, boxWidth-4, "CONFIRM ADMINISTRATIVE CHANGE", background.Bold(true))
-	putClipped(screen, x+2, boxY+3, boxWidth-4, confirmation.Operation.Summary, styleNormal.Background(tcell.ColorDarkRed))
+	putClipped(screen, x+2, boxY+1, boxWidth-4, presentation.title, background.Bold(true))
+	putClipped(screen, x+2, boxY+3, boxWidth-4, confirmation.Operation.Summary, styleNormal.Background(presentation.background))
 	row := boxY + 5
 	for _, line := range wrapText(confirmation.Operation.Preview, boxWidth-4) {
 		if row >= boxY+boxHeight-2 {
 			break
 		}
-		putClipped(screen, x+2, row, boxWidth-4, line, styleMuted.Background(tcell.ColorDarkRed))
+		putClipped(screen, x+2, row, boxWidth-4, line, styleNormal.Background(presentation.background))
 		row++
 	}
 	if confirmation.Operation.ConfirmPhrase == "" {
-		putClipped(screen, x+2, boxY+boxHeight-2, boxWidth-4, "Press y to apply · n or Esc to cancel", styleAccent.Background(tcell.ColorDarkRed))
+		putClipped(screen, x+2, boxY+boxHeight-2, boxWidth-4, "Press y to apply · n or Esc to cancel", styleAccent.Background(presentation.background))
 		return
 	}
 	phraseRow := boxY + boxHeight - 4
-	putClipped(screen, x+2, phraseRow, boxWidth-4, "Type exactly: "+confirmation.Operation.ConfirmPhrase, styleAccent.Background(tcell.ColorDarkRed))
-	putClipped(screen, x+2, phraseRow+1, boxWidth-4, "> "+string(confirmation.Input), styleInput.Background(tcell.ColorDarkRed))
-	putClipped(screen, x+2, boxY+boxHeight-2, boxWidth-4, "Enter confirms · Esc cancels", styleAccent.Background(tcell.ColorDarkRed))
+	putClipped(screen, x+2, phraseRow, boxWidth-4, "Type exactly: "+confirmation.Operation.ConfirmPhrase, styleAccent.Background(presentation.background))
+	putClipped(screen, x+2, phraseRow+1, boxWidth-4, "> "+string(confirmation.Input), styleInput.Background(presentation.background))
+	putClipped(screen, x+2, boxY+boxHeight-2, boxWidth-4, "Enter confirms · Esc cancels", styleAccent.Background(presentation.background))
+}
+
+type adminConfirmationPresentation struct {
+	title      string
+	background tcell.Color
+	heading    tcell.Style
+}
+
+func adminConfirmationPresentationFor(impact AdminConfirmationImpact) adminConfirmationPresentation {
+	switch impact {
+	case adminConfirmationAddition:
+		return adminConfirmationPresentation{
+			title:      "CONFIRM ADDITION",
+			background: tcell.ColorDarkGreen,
+			heading:    tcell.StyleDefault.Foreground(tcell.ColorLightGreen).Background(tcell.ColorDarkGreen),
+		}
+	case adminConfirmationDestructive:
+		return adminConfirmationPresentation{
+			title:      "CONFIRM DESTRUCTIVE ACTION",
+			background: tcell.ColorDarkRed,
+			heading:    styleError.Background(tcell.ColorDarkRed),
+		}
+	default:
+		return adminConfirmationPresentation{
+			title:      "CONFIRM ADMINISTRATIVE CHANGE",
+			background: tcell.ColorDarkBlue,
+			heading:    styleAccent.Background(tcell.ColorDarkBlue),
+		}
+	}
 }
 
 func drawExitConfirmation(screen tcell.Screen, app *App, x, width, y, height int) {

@@ -18,7 +18,9 @@ it is not an IRC chat client and never opens channels or displays messages.
 - Show only commands supported by the running Soju version.
 - Verify release artifacts with SHA-256, embed the exact Git revision, and test
   the command contract against real Soju v0.9.0 and v0.10.1 instances in CI.
-- Preview every mutation as a redacted `sojuctl` command before confirmation.
+- Preview every mutation as a redacted `sojuctl` command in an effect-coded
+  confirmation: green for additions, blue for changes, and red for destructive
+  actions.
 - Open built-in, offline help with `?`, `F1`, or the help menu item.
 - Use a responsive Soju-TUI bottle wordmark without crowding command output.
 - Written in Go and distributed as self-contained Linux AMD64 and ARM64
