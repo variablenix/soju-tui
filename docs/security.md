@@ -18,15 +18,18 @@ is never trusted as current. Updates use a temporary file in the destination
 directory followed by an atomic rename, and replacing an existing file requires
 confirmation.
 
-Production setup rejects development, dirty, and unknown builds. It verifies
-repository artifacts against `dist/SHA256SUMS`, compares the installed copy by
-SHA-256 after atomic replacement, and records release revision/toolchain data in
-`dist/BUILDINFO`. Checksums detect corruption; release authenticity also
-depends on trusted GitHub transport, branch protection, workflow integrity,
-and release access controls. The manually dispatched release workflow receives
-repository contents write permission only in its publishing job and uses the
-short-lived GitHub Actions token. It does not require a stored token or private
-GPG key. Local release builds continue to require a signed tag.
+Production setup rejects development, dirty, and unknown builds. The normal
+installation downloads the architecture-matched release and its
+`SHA256SUMS` manifest over HTTPS, verifies the downloaded binary before use,
+and compares the installed copy by SHA-256 after atomic replacement. An
+explicit `--binary` installation can be verified with `--checksums`, including
+the manifest generated in `dist/`. Checksums detect corruption; release
+authenticity also depends on trusted GitHub transport, branch protection,
+workflow integrity, and release access controls. The manually dispatched
+release workflow receives repository contents write permission only in its
+publishing job and uses the short-lived GitHub Actions token. It does not
+require a stored token or private GPG key. Local release builds continue to
+require a signed tag.
 
 ## Command execution
 

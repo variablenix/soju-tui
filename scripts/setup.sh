@@ -16,6 +16,11 @@ ASSUME_YES=0
 CHECKSUMS_PATH=
 ALLOW_DEVELOPMENT_BUILD=0
 DEFAULT_BINARY=0
+RELEASE_VERSION=latest
+RELEASE_EXPLICIT=0
+USE_RELEASE=1
+RELEASE_TEMP_DIR=
+RELEASE_ASSET=
 
 usage() {
 	cat <<'EOF'
@@ -31,8 +36,9 @@ Options:
   --config PATH     Soju config path (default: /etc/soju/config)
   --socket PATH     Override the admin socket discovered from the config
   --sojuctl PATH    Override the sojuctl executable
-  --binary PATH     Override the architecture-matched source binary
-  --checksums PATH  SHA256SUMS manifest for the selected binary
+  --release VERSION Install a GitHub release (default: latest stable)
+  --binary PATH     Use a local architecture-matched binary instead
+  --checksums PATH  SHA256SUMS manifest for a local binary
   --install-path P  Command path (default: /usr/local/bin/soju-tui)
   --allow-development-build
                     Permit a dev/dirty/unknown build (not for production)
@@ -43,6 +49,13 @@ Options:
 
 Run it directly; the script requests sudo when needed:
   ./scripts/setup.sh
+
+Pin a release when required:
+  ./scripts/setup.sh --release 0.3.2
+
+Use checked-out or locally built artifacts explicitly:
+  ./scripts/setup.sh --binary /absolute/path/to/soju-tui-linux-amd64 \
+    --checksums /absolute/path/to/SHA256SUMS
 EOF
 }
 
@@ -87,9 +100,19 @@ while [ "$#" -gt 0 ]; do
 		SOJUCTL_PATH=$2
 		shift 2
 		;;
+	--release)
+		[ "$#" -ge 2 ] || fail "--release requires a version or latest"
+		[ -z "$TUI_BINARY" ] || fail "--release cannot be combined with --binary"
+		RELEASE_VERSION=$2
+		RELEASE_EXPLICIT=1
+		USE_RELEASE=1
+		shift 2
+		;;
 	--binary)
 		[ "$#" -ge 2 ] || fail "--binary requires a value"
+		[ "$RELEASE_EXPLICIT" -eq 0 ] || fail "--binary cannot be combined with --release"
 		TUI_BINARY=$2
+		USE_RELEASE=0
 		shift 2
 		;;
 	--checksums)
@@ -171,13 +194,59 @@ esac
 [ -x "$SOJUCTL_PATH" ] || fail "$SOJUCTL_PATH is not executable"
 [ -x "$GRANT_SCRIPT" ] || fail "$GRANT_SCRIPT is missing or not executable"
 
-if [ -z "$TUI_BINARY" ]; then
-	DEFAULT_BINARY=1
+case "$RELEASE_VERSION" in
+latest) ;;
+*[!A-Za-z0-9._+-]*) fail "release version contains unsupported characters" ;;
+esac
+case "$RELEASE_VERSION" in
+latest) ;;
+*)
+	printf '%s\n' "$RELEASE_VERSION" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+([.-][A-Za-z0-9][A-Za-z0-9.-]*)?$' ||
+		fail "release version must look like 0.3.2 or 0.3.2-rc.1"
+	;;
+esac
+
+if [ "$USE_RELEASE" -eq 1 ] && [ -n "$CHECKSUMS_PATH" ]; then
+	fail "--checksums is only valid with --binary"
+fi
+
+if [ "$USE_RELEASE" -eq 1 ]; then
 	case "$(uname -m)" in
-	x86_64 | amd64) TUI_BINARY=$ROOT_DIR/dist/soju-tui-linux-amd64 ;;
-	aarch64 | arm64) TUI_BINARY=$ROOT_DIR/dist/soju-tui-linux-arm64 ;;
-	*) TUI_BINARY=$ROOT_DIR/dist/soju-tui ;;
+	x86_64 | amd64) RELEASE_ASSET=soju-tui-linux-amd64 ;;
+	aarch64 | arm64) RELEASE_ASSET=soju-tui-linux-arm64 ;;
+	*) fail "unsupported architecture $(uname -m); use --binary with a native executable" ;;
 	esac
+	command -v curl >/dev/null 2>&1 || fail "curl is required to download releases; use --binary for a local installation"
+	RELEASE_TEMP_DIR=$(mktemp -d "${TMPDIR:-/tmp}/soju-tui-release.XXXXXX") || fail "cannot create a temporary release directory"
+	chmod 700 "$RELEASE_TEMP_DIR"
+	trap 'rm -rf -- "$RELEASE_TEMP_DIR"' EXIT HUP INT TERM
+	RELEASE_BASE_URL=https://github.com/variablenix/soju-tui/releases
+	if [ "$RELEASE_VERSION" = latest ]; then
+		RELEASE_BASE_URL=$RELEASE_BASE_URL/latest/download
+	else
+		RELEASE_BASE_URL=$RELEASE_BASE_URL/download/v$RELEASE_VERSION
+	fi
+	printf 'Downloading Soju-TUI release (%s, %s) from GitHub...\n' "$RELEASE_VERSION" "$RELEASE_ASSET"
+	curl --fail --silent --show-error --location --retry 3 --retry-delay 1 \
+		--connect-timeout 15 --max-time 300 --proto '=https' --proto-redir '=https' --tlsv1.2 \
+		"$RELEASE_BASE_URL/SHA256SUMS" --output "$RELEASE_TEMP_DIR/SHA256SUMS" ||
+		fail "cannot download the release checksum manifest"
+	curl --fail --silent --show-error --location --retry 3 --retry-delay 1 \
+		--connect-timeout 15 --max-time 300 --proto '=https' --proto-redir '=https' --tlsv1.2 \
+		"$RELEASE_BASE_URL/$RELEASE_ASSET" --output "$RELEASE_TEMP_DIR/$RELEASE_ASSET" ||
+		fail "cannot download the release binary"
+	chmod 755 "$RELEASE_TEMP_DIR/$RELEASE_ASSET"
+	TUI_BINARY=$RELEASE_TEMP_DIR/$RELEASE_ASSET
+	CHECKSUMS_PATH=$RELEASE_TEMP_DIR/SHA256SUMS
+else
+	if [ -z "$TUI_BINARY" ]; then
+		DEFAULT_BINARY=1
+		case "$(uname -m)" in
+		x86_64 | amd64) TUI_BINARY=$ROOT_DIR/dist/soju-tui-linux-amd64 ;;
+		aarch64 | arm64) TUI_BINARY=$ROOT_DIR/dist/soju-tui-linux-arm64 ;;
+		*) TUI_BINARY=$ROOT_DIR/dist/soju-tui ;;
+		esac
+	fi
 fi
 case "$TUI_BINARY" in
 /*) ;;
@@ -221,6 +290,13 @@ if [ "$ALLOW_DEVELOPMENT_BUILD" -ne 1 ]; then
 	esac
 fi
 SOURCE_SHA256=$(binary_sha256 "$TUI_BINARY")
+
+if [ "$USE_RELEASE" -eq 1 ] && [ "$RELEASE_VERSION" != latest ]; then
+	case "$SOURCE_VERSION" in
+	"$RELEASE_VERSION" | "$RELEASE_VERSION ("*) ;;
+	*) fail "downloaded binary reports $SOURCE_VERSION, expected release $RELEASE_VERSION" ;;
+	esac
+fi
 
 if [ -z "$CHECKSUMS_PATH" ] && [ "$DEFAULT_BINARY" -eq 1 ]; then
 	CHECKSUMS_PATH=$ROOT_DIR/dist/SHA256SUMS
@@ -293,6 +369,9 @@ printf '  sojuctl:             %s\n' "$SOJUCTL_PATH"
 printf '  TUI binary:          %s\n' "$TUI_BINARY"
 printf '  TUI build:           %s\n' "$SOURCE_VERSION"
 printf '  TUI SHA-256:         %s\n' "$SOURCE_SHA256"
+if [ "$USE_RELEASE" -eq 1 ]; then
+	printf '  Release source:      GitHub %s\n' "$RELEASE_VERSION"
+fi
 printf '  Checksums manifest:  %s\n' "${CHECKSUMS_PATH:-not supplied (custom build)}"
 if [ "$INSTALL_BINARY" -eq 1 ]; then
 	printf '  Installed command:   %s (%s)\n\n' "$INSTALL_PATH" "$INSTALL_STATUS"
