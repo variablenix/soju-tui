@@ -85,6 +85,10 @@ func handleAdminKeyEventWithViewport(app *App, event *tcell.EventKey, helpWidth,
 		} else {
 			key = "down"
 		}
+	case tcell.KeyLeft:
+		key = "left"
+	case tcell.KeyRight:
+		key = "right"
 	case tcell.KeyHome:
 		key = "home"
 	case tcell.KeyEnd:
@@ -139,12 +143,12 @@ func drawAdminUI(screen tcell.Screen, app *App) {
 	} else {
 		drawAdminOutput(screen, app, contentX, contentWidth, 2, contentHeight)
 	}
-	footer := " ↑↓ select  PgUp/PgDn scroll output  Enter open  ? help  r refresh  q quit"
+	footer := " ↑↓/JK/WS select  →/L/D open  ←/H/A back  PgUp/PgDn output  ? help  q quit"
 	if app.admin.View == adminOutput && app.admin.OutputScroll > 0 {
-		footer = " PgUp older  PgDn newer  End menu  ? help  q quit"
+		footer = " ↑↓/JK/WS select  PgUp older  PgDn newer  End menu  ? help  q quit"
 	}
 	if app.admin.HelpOpen && !app.admin.ExitConfirm {
-		footer = " ↑↓ scroll  PgUp/PgDn page  Home/End jump  Esc or ? close  q quit"
+		footer = " ↑↓/JK/WS scroll  PgUp/PgDn page  Home/End jump  ←/H/A/Esc/? close"
 	}
 	putClipped(screen, 0, height-2, width, footer, styleMuted)
 	status := " " + app.currentStatusLocked()

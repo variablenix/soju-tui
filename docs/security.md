@@ -38,6 +38,10 @@ Built-in Soju-TUI help is compiled static text. Documentation URLs are shown
 for copying only; the help action does not launch a browser, make a network
 request, invoke `sojuctl`, or execute a shell.
 
+Vim and WASD letter aliases are translated only after form and confirmation
+input has been handled. Those letters therefore remain literal in usernames,
+passwords, commands, notices, and exact confirmation phrases.
+
 Read-only actions execute directly. Every mutation has a review screen;
 destructive and high-risk changes require an exact typed phrase. Exiting also
 requires confirmation, including while an operation is running.

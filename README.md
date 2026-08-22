@@ -22,6 +22,8 @@ it is not an IRC chat client and never opens channels or displays messages.
   confirmation: green for additions, blue for changes, and red for destructive
   actions.
 - Open built-in, offline help with `?`, `F1`, or the help menu item.
+- Navigate menus and help with arrow keys, Vim `HJKL`, or WASD without
+  intercepting text entered in forms and confirmations.
 - Use a responsive Soju-TUI bottle wordmark without crowding command output.
 - Written in Go and distributed as self-contained Linux AMD64 and ARM64
   executables. Running those executables requires neither the Go toolchain nor

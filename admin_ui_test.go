@@ -43,6 +43,7 @@ func TestAdminUIUsesAdministrationIdentityAndResponsiveBrand(t *testing.T) {
 	large := renderAdminScreen(t, app, 120, 40)
 	for _, expected := range []string{
 		adminSidebarSubtitle,
+		"JK/WS",
 		"SOJU-TUI ADMINISTRATION CONSOLE",
 		"  ______     _____      ___    ___  __",
 		"/\\_____ \\_ /\\  \\/\\ ,\\  \\ \\ \\\\ \\ \\  \\ \\ ,\\",
@@ -71,7 +72,7 @@ func TestAdminUIUsesAdministrationIdentityAndResponsiveBrand(t *testing.T) {
 	app.admin.HelpOpen = true
 	app.admin.HelpScroll = 0
 	help := renderAdminScreen(t, app, 80, 24)
-	if !strings.Contains(help, "SOJU-TUI HELP & DOCUMENTATION") || !strings.Contains(help, "Up/Down") {
+	if !strings.Contains(help, "SOJU-TUI HELP & DOCUMENTATION") || !strings.Contains(help, "Vim H/J/K/L") {
 		t.Fatalf("help view did not render from the beginning:\n%s", help)
 	}
 	app.admin.HelpScroll = len(adminHelpLines(51)) + 100
