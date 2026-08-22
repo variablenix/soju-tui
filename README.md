@@ -25,7 +25,7 @@ it is not an IRC chat client and never opens channels or displays messages.
   executables. Running those executables requires neither the Go toolchain nor
   ncurses; a running Soju instance and `sojuctl` are still required.
 
-![Soju-TUI administration interface](soju-tui-screen.png)
+![Soju-TUI administration interface](./soju-tui-screen.png?raw=true&v=20260821)
 
 ## Quick start
 
