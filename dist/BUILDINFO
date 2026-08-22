@@ -1,4 +1,4 @@
-version=0.3.0
-revision=18a2de05328f
-go=go version go1.26.6 darwin/arm64
+version=0.3.1
+revision=1248be48e592
+go=go version go1.26.6 linux/amd64
 target=all
