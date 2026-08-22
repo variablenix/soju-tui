@@ -80,8 +80,8 @@ configure admin-socket permissions with their native service manager.
   CertFP preflight, and downstream device certificates
 - [Building and releases](docs/building.md) — helper script, targets, versions,
   and verification
-- [GitHub mirror and checks](docs/github-mirror.md) — GitHub Actions,
-  Dependabot, mirror topology, and the `main` ruleset
+- [GitHub repository and checks](docs/github-mirror.md) — GitHub Actions,
+  automated releases, downstream mirroring, and the `main` ruleset
 - [Security model](docs/security.md) — socket access, confirmations, secrets,
   and trust boundaries
 - [Troubleshooting](docs/troubleshooting.md) — permissions, binaries, config,

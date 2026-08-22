@@ -9,6 +9,7 @@ VERSION=${VERSION:-dev}
 PULL=0
 RELEASE=0
 ALLOW_UNSIGNED_TAG=0
+GITHUB_ACTIONS_RELEASE=0
 GO_BIN=${GO_BIN:-go}
 GO_TOOLCHAIN=${GOTOOLCHAIN:-local}
 REVISION=${REVISION:-}
@@ -25,6 +26,7 @@ go_cmd() {
 usage() {
 	cat <<'EOF'
 Usage: scripts/build.sh [--target TARGET] [--version VERSION] [--pull] [--release]
+                        [--allow-unsigned-tag] [--github-actions-release]
 
 TARGET values:
   host         Build for the current Go host.
@@ -37,6 +39,8 @@ TARGET values:
           refuses development version strings.
 --allow-unsigned-tag permits an unsigned release tag for private test builds;
           production releases should not use it.
+--github-actions-release permits the protected GitHub release workflow to use
+          its repository-scoped identity instead of a personal GPG signature.
 EOF
 }
 
@@ -64,6 +68,10 @@ while [ "$#" -gt 0 ]; do
 			ALLOW_UNSIGNED_TAG=1
 			shift
 			;;
+		--github-actions-release)
+			GITHUB_ACTIONS_RELEASE=1
+			shift
+			;;
 		-h|--help)
 			usage
 			exit 0
@@ -79,6 +87,11 @@ done
 if [ "$PULL" -eq 1 ]; then
 	log "pulling latest changes with fast-forward-only git pull"
 	git pull --ff-only
+fi
+
+if [ "$GITHUB_ACTIONS_RELEASE" -eq 1 ] && [ "$RELEASE" -ne 1 ]; then
+	echo "--github-actions-release requires --release" >&2
+	exit 2
 fi
 
 command -v "$GO_BIN" >/dev/null 2>&1 || { echo "Go is required to build soju-tui" >&2; exit 1; }
@@ -114,10 +127,34 @@ if [ "$RELEASE" -eq 1 ]; then
 		echo "release build requires HEAD to be tagged v$VERSION" >&2
 		exit 2
 	}
+	if [ "$GITHUB_ACTIONS_RELEASE" -eq 1 ]; then
+		[ "${GITHUB_ACTIONS:-}" = true ] || {
+			echo "--github-actions-release is restricted to GitHub Actions" >&2
+			exit 2
+		}
+		[ "${GITHUB_SERVER_URL:-}" = https://github.com ] || {
+			echo "--github-actions-release requires github.com" >&2
+			exit 2
+		}
+		[ "${GITHUB_EVENT_NAME:-}" = workflow_dispatch ] || {
+			echo "--github-actions-release requires a manually dispatched workflow" >&2
+			exit 2
+		}
+		[ "${GITHUB_REF:-}" = refs/heads/main ] || {
+			echo "--github-actions-release requires refs/heads/main" >&2
+			exit 2
+		}
+		[ "${GITHUB_SHA:-}" = "$(git rev-parse HEAD)" ] || {
+			echo "--github-actions-release requires GITHUB_SHA to match HEAD" >&2
+			exit 2
+		}
+	fi
 	if [ "$ALLOW_UNSIGNED_TAG" -ne 1 ] && ! git tag -v "v$VERSION" >/dev/null 2>&1; then
-		echo "release tag v$VERSION is not a valid signature from a trusted local Git key" >&2
-		echo "sign the production tag, or use --allow-unsigned-tag only for a private test build" >&2
-		exit 2
+		if [ "$GITHUB_ACTIONS_RELEASE" -ne 1 ]; then
+			echo "release tag v$VERSION is not a valid signature from a trusted local Git key" >&2
+			echo "sign the production tag, or use the protected GitHub release workflow" >&2
+			exit 2
+		fi
 	fi
 	export SOURCE_DATE_EPOCH
 	SOURCE_DATE_EPOCH=$(git show -s --format=%ct HEAD)
