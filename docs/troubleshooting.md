@@ -60,7 +60,8 @@ dist/soju-tui-linux-amd64 -version
 ```
 
 If it is missing or stale, return to the repository and safely preview and
-rerun setup:
+rerun setup. The normal rerun downloads the latest stable release; it does not
+depend on a checked-in artifact-sync update:
 
 ```sh
 ./scripts/setup.sh --dry-run
@@ -69,20 +70,26 @@ rerun setup:
 
 The apply run asks for replacement immediately before the atomic copy. A
 successful run prints the selected build revision and matching source and
-installed SHA-256 values. Verify the files directly if needed:
+installed SHA-256 values. Verify the installed command directly if needed:
 
 ```sh
-cmp -s dist/soju-tui-linux-amd64 /usr/local/bin/soju-tui \
-  && echo "installed binary matches the repository artifact"
-sha256sum dist/soju-tui-linux-amd64 /usr/local/bin/soju-tui
-(cd dist && sha256sum -c SHA256SUMS)
+soju-tui -version
+sha256sum /usr/local/bin/soju-tui
 ```
 
-Use `dist/soju-tui-linux-arm64` instead on an ARM64 host.
+For an explicit local install, use the matching `dist/` artifact and manifest:
 
-If `cmp` succeeds but typing `soju-tui` behaves differently, `type -a soju-tui`
-will reveal an alias, shell function, or earlier executable in `PATH`. Start a
-fresh shell or run `hash -r` after correcting that command-resolution issue.
+```sh
+./scripts/setup.sh --binary "$PWD/dist/soju-tui-linux-amd64" \
+  --checksums "$PWD/dist/SHA256SUMS"
+```
+
+Use the ARM64 artifact instead on an ARM64 host.
+
+If the installed version looks correct but typing `soju-tui` behaves
+differently, `type -a soju-tui` will reveal an alias, shell function, or earlier
+executable in `PATH`. Start a fresh shell or run `hash -r` after correcting
+that command-resolution issue.
 
 If `/usr/local/bin` is not in the login shell's `PATH`, run the absolute path or
 choose a trusted directory already in `PATH` with `--install-path`.

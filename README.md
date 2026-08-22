@@ -46,13 +46,22 @@ Preview and run the guided setup from the repository:
 ./scripts/setup.sh
 ```
 
-The production setup accepts a numbered, verifiable build. Development builds
-are intentionally rejected unless `--allow-development-build` is supplied for
-local testing. On the development branch, use the same option with both the
-dry run and apply command after reviewing the displayed build and SHA-256.
+By default, production setup downloads the latest stable, architecture-matched
+Linux release from GitHub and verifies its `SHA256SUMS` manifest before
+installation. Pin a release when you need a repeatable deployment:
 
-The wizard installs the matching binary as `/usr/local/bin/soju-tui`. Run it as
-the regular local user authorized by the wizard:
+```sh
+./scripts/setup.sh --release 0.3.2
+```
+
+Development builds are intentionally rejected unless
+`--allow-development-build` is supplied for local testing. To install a local
+build instead of a GitHub release, pass it explicitly with `--binary` and, when
+available, its `SHA256SUMS` file. This keeps normal deployments independent of
+the repository's checked-in `dist/` files.
+
+The wizard installs the verified release binary as `/usr/local/bin/soju-tui`.
+Run it as the regular local user authorized by the wizard:
 
 ```sh
 soju-tui

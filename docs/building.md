@@ -32,12 +32,12 @@ successful build:
 soju-tui -version
 ```
 
-The setup wizard copies the architecture-matched artifact to
+The setup wizard normally downloads the architecture-matched GitHub release to
 `/usr/local/bin/soju-tui`. It does not copy an unchanged artifact. Build output
 includes the source revision, writes `dist/SHA256SUMS` and `dist/BUILDINFO`, and
-setup verifies SHA-256 before and after installation. Use
-`--binary /absolute/path` for a custom build or `--no-install` to keep running
-from `dist/`.
+an explicit local install verifies SHA-256 before and after installation. Use
+`--release VERSION` for a pinned release, `--binary /absolute/path` for a local
+build, or `--no-install` to validate without installing.
 
 To fast-forward from Git before building:
 
@@ -91,6 +91,12 @@ binary release. There is no automatic schedule and merging a pull request does
 not publish anything: a maintainer deliberately starts the Release workflow
 after all protected checks on `main` are green and no release-blocking issue is
 known.
+
+The release workflow publishes the four release files directly to GitHub. The
+normal setup wizard downloads and verifies those files, so a follow-up PR that
+copies release binaries into the repository's `dist/` directory is not part of
+the release process. The tracked `dist/` directory remains useful for local
+builds and explicit `--binary` installations.
 
 ## Optional local release build
 
