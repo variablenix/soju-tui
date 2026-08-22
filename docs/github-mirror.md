@@ -1,100 +1,73 @@
-# GitHub mirror and checks
+# GitHub repository and checks
+
+GitHub is the writable source of truth for this project. Development, pull
+requests, protected checks, tags, and releases happen there. A Gitea copy may
+be maintained as a read-only downstream mirror, but it must never push back to
+GitHub.
 
 The repository ships GitHub Actions under `.github/workflows/` and no native
-`.gitea/workflows/` workflow. Current Gitea installations discover both
-directories by default, so disable Actions for this repository in Gitea. Every
-job also requires `github.server_url` to be `https://github.com`; this prevents
-runner use if Gitea Actions is accidentally enabled, although Gitea may still
-display the detected jobs as skipped. A GitHub mirror runs three stable checks:
+`.gitea/workflows/` workflow. Gitea installations may discover GitHub workflow
+files, so disable Actions for the downstream repository. Every job also checks
+that it is running on `https://github.com`.
+
+## Checks
 
 - `Verify` runs formatting, module verification, race tests, coverage,
-  staticcheck, gosec, govulncheck, shellcheck, and both static Linux builds.
+  staticcheck, gosec, govulncheck, shellcheck, workflow validation, and both
+  static Linux builds.
 - `Soju Compatibility` starts isolated Soju v0.9.0 and v0.10.1 instances and
   verifies the `sojuctl` contract used by the TUI.
-- `Analyze Go` runs CodeQL. CodeQL must be available for the GitHub repository
-  before this check can be required.
+- `Analyze Go` runs CodeQL.
 
-Dependabot checks Go modules and pinned GitHub Actions each Monday. The workflow
-actions are pinned to full commit IDs; Dependabot retains that protection when
-it proposes updates.
+Dependabot checks Go modules and pinned GitHub Actions each Monday. Workflow
+actions are pinned to full commit IDs, and Dependabot retains that protection
+when proposing updates.
 
-## Choose one source of truth
+## Protect `main`
 
-A Gitea push mirror force-pushes branches and tags to GitHub. Changes made only
-on GitHub can therefore be overwritten by the next synchronization.
+Under **Settings > Rules > Rulesets**, keep the active `main` ruleset configured
+to block deletions and force pushes, require pull requests, require branches to
+be current, and require these GitHub Actions checks:
 
-For a **Gitea-primary mirror**, make changes and releases in Gitea. Treat GitHub
-as read-only, do not merge Dependabot or other GitHub pull requests, and allow
-only the dedicated mirror identity to bypass the `main` ruleset. GitHub Actions
-still report failures, but they run after Gitea has updated `main`; they cannot
-gate the authoritative Gitea push.
+- `Verify`
+- `Soju Compatibility`
+- `Analyze Go`
 
-For **GitHub-gated development**, make GitHub the write authority for `main` and
-use pull requests there. Stop the Gitea-to-GitHub push mirror before merging
-GitHub pull requests. A separate GitHub-to-Gitea synchronization can then keep
-Gitea as a downstream copy. Do not run writable mirrors in both directions.
+Keep the bypass list empty unless a narrowly scoped automation identity has a
+documented need. Do not enable a broad administrator bypass. The repository
+history is append-only; do not rewrite or force-push `main` again.
 
-## Create the Gitea-primary push mirror
+The one historical rewrite performed before GitHub became authoritative is
+connected back to current history by a no-content merge. Existing clean clones
+from either side of that rewrite can therefore fast-forward to current `main`.
 
-1. In the Gitea repository's **Settings > Actions**, disable repository Actions.
-   This does not affect GitHub after mirroring.
-2. Commit and push `.github/` to Gitea.
-3. Create an empty GitHub repository named `soju-tui`; do not initialize it with
-   a README, license, or `.gitignore`.
-4. Create a dedicated, expiring GitHub token limited to the destination
-   repository. It needs repository contents write access and permission to
-   update workflow files. A classic token uses `public_repo` for a public
-   destination (`repo` for private) plus `workflow`.
-5. In Gitea, open **Settings > Repository > Mirror Settings**. Enter
-   `https://github.com/OWNER/soju-tui.git`, expand **Authorization**, and enter
-   the GitHub username and token. Do not put the token in the URL.
-6. Enable **Sync when new commits are pushed**, add the push mirror, then use
-   **Synchronize Now** for the first copy.
-7. Rotate or revoke the token if it is ever exposed. Keep its repository scope
-   and expiration as narrow as practical.
+## Automated releases
 
-## Enable and run GitHub checks
+Use **Actions > Release > Run workflow** and enter the intended semantic
+version without a `v` prefix. The workflow can run only from `main`. It repeats
+the production gates, builds AMD64 and ARM64 artifacts, generates checksums and
+build metadata, and publishes the tag and release as `github-actions[bot]`.
 
-1. On GitHub, open **Settings > Actions > General**. Allow actions created by
-   GitHub and leave the default workflow token at read-only repository access.
-   The workflows request only the additional CodeQL upload permission they use.
-2. Do not enable CodeQL default setup in addition to this repository's advanced
-   workflow. If the repository is eligible, use the committed `codeql.yml` as
-   advanced setup.
-3. Open **Actions**, select **CI**, and choose **Run workflow**. Repeat for
-   **CodeQL**. Manual runs are available after the files exist on the default
-   branch.
-4. Confirm `Verify`, `Soju Compatibility`, and—when CodeQL is available—
-   `Analyze Go` all complete successfully. Checks must run at least once before
-   GitHub offers them in a ruleset.
+The publishing job has only `contents: write`; verification jobs remain
+read-only. GitHub supplies a temporary repository-scoped token, so no personal
+access token, repository secret, or GPG key is required. Existing tags and
+releases are never replaced.
 
-## Protect `main` with a ruleset
+## Downstream Gitea mirror
 
-Open **Settings > Rules > Rulesets > New ruleset > New branch ruleset** and use:
+Create or retain Gitea as a pull mirror of
+`https://github.com/variablenix/soju-tui.git` with **This repository will be a
+mirror** enabled. The Gitea copy should be treated as read-only and periodically
+pull from GitHub. Disable Gitea repository Actions.
 
-- Name: `Protect main`
-- Enforcement: `Active`
-- Target: the default branch (`main`)
-- Rules: block deletions, block force pushes, require a pull request, resolve
-  review conversations, and require status checks
-- Required checks from GitHub Actions: `Verify`, `Soju Compatibility`, and
-  `Analyze Go` when CodeQL is available
-- Additional status setting: require branches to be up to date before merging
+Do not configure a Gitea push mirror back to GitHub, do not make commits only
+in Gitea, and do not run writable mirrors in both directions. On servers and
+workstations, clone GitHub directly when you need to build, contribute, or
+receive releases immediately.
 
-For a Gitea-primary push mirror, grant bypass only through the narrowest actor
-GitHub offers, such as a dedicated GitHub App or organization team containing
-only the mirror account. If the mirror identity cannot be isolated in the
-bypass list, the ruleset and continuous force-push mirror are not a safe
-combination; choose GitHub-gated development instead.
+## Dependabot and code scanning
 
-Do not require signed commits unless the complete mirrored history satisfies
-that rule. Do not enable a broad administrator bypass merely to make mirroring
-convenient.
-
-## Dependabot
-
-The committed `.github/dependabot.yml` enables version-update pull requests.
-Enable Dependabot alerts and security updates under **Settings > Advanced
-Security** where available. With a Gitea-primary mirror, review each proposal
-on GitHub but reproduce and test the dependency change in Gitea; merging the
-GitHub pull request would create history that the push mirror can overwrite.
+Keep Dependabot alerts and security updates enabled under **Settings > Advanced
+Security**. Use the committed `codeql.yml` as advanced CodeQL setup rather than
+enabling default setup in parallel. Review and merge Dependabot pull requests
+on GitHub after all protected checks pass.
