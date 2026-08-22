@@ -74,6 +74,9 @@ jobs:
       - name: Check shell helpers
         run: shellcheck scripts/*.sh
 
+      - name: Test verified release setup as an unprivileged user
+        run: ./scripts/test-setup-release.sh
+
       - name: Validate GitHub workflows
         run: go run github.com/rhysd/actionlint/cmd/actionlint@v1.7.7
 
