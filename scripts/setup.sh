@@ -21,6 +21,24 @@ RELEASE_EXPLICIT=0
 USE_RELEASE=1
 RELEASE_TEMP_DIR=
 RELEASE_ASSET=
+TEMP_BINARY=
+
+cleanup() {
+	if [ -n "$TEMP_BINARY" ]; then
+		case "$TEMP_BINARY" in
+		/*/.soju-tui.install.*) rm -f -- "$TEMP_BINARY" ;;
+		esac
+	fi
+	if [ -n "$RELEASE_TEMP_DIR" ]; then
+		case "$RELEASE_TEMP_DIR" in
+		/tmp/soju-tui-release.*) rm -rf -- "$RELEASE_TEMP_DIR" ;;
+		esac
+	fi
+}
+trap cleanup EXIT
+trap 'exit 129' HUP
+trap 'exit 130' INT
+trap 'exit 143' TERM
 
 usage() {
 	cat <<'EOF'
@@ -217,9 +235,8 @@ if [ "$USE_RELEASE" -eq 1 ]; then
 	*) fail "unsupported architecture $(uname -m); use --binary with a native executable" ;;
 	esac
 	command -v curl >/dev/null 2>&1 || fail "curl is required to download releases; use --binary for a local installation"
-	RELEASE_TEMP_DIR=$(mktemp -d "${TMPDIR:-/tmp}/soju-tui-release.XXXXXX") || fail "cannot create a temporary release directory"
-	chmod 700 "$RELEASE_TEMP_DIR"
-	trap 'rm -rf -- "$RELEASE_TEMP_DIR"' EXIT HUP INT TERM
+	RELEASE_TEMP_DIR=$(mktemp -d /tmp/soju-tui-release.XXXXXX) || fail "cannot create a temporary release directory"
+	chmod 0755 "$RELEASE_TEMP_DIR"
 	RELEASE_BASE_URL=https://github.com/variablenix/soju-tui/releases
 	if [ "$RELEASE_VERSION" = latest ]; then
 		RELEASE_BASE_URL=$RELEASE_BASE_URL/latest/download
@@ -380,7 +397,7 @@ else
 fi
 
 install_tui_binary() {
-	[ "$INSTALL_BINARY" -eq 1 ] || return
+	[ "$INSTALL_BINARY" -eq 1 ] || return 0
 	if installed_binary_is_current; then
 		printf 'Installed command is already current: %s\n' "$INSTALL_PATH"
 	else
@@ -400,13 +417,11 @@ install_tui_binary() {
 			validate_install_directory
 		fi
 		TEMP_BINARY=$(mktemp "$INSTALL_DIR/.soju-tui.install.XXXXXX") || fail "cannot create a temporary install file in $INSTALL_DIR"
-		trap 'rm -f "$TEMP_BINARY"' EXIT HUP INT TERM
 		install -m 0755 "$TUI_BINARY" "$TEMP_BINARY"
 		chown 0:0 "$TEMP_BINARY"
 		chmod 0755 "$TEMP_BINARY"
 		mv -f "$TEMP_BINARY" "$INSTALL_PATH"
 		TEMP_BINARY=
-		trap - EXIT HUP INT TERM
 		[ -x "$INSTALL_PATH" ] || fail "installed command is not executable: $INSTALL_PATH"
 		installed_binary_is_current || fail "installed command failed content, ownership, mode, or link-count verification"
 		printf 'Installed command: %s\n' "$INSTALL_PATH"
@@ -487,6 +502,11 @@ if [ "$INSTALL_BINARY" -eq 1 ]; then
 		printf '\nSetup complete. Run as %s:\n  %s\n' "$TARGET_USER" "$INSTALL_PATH"
 	fi
 else
-	printf '\nSetup complete without command installation. Run as %s:\n  %s\n' "$TARGET_USER" "$TUI_BINARY"
+	if [ "$USE_RELEASE" -eq 1 ]; then
+		printf '\nRelease validation complete; no command was installed.\n'
+		printf 'Rerun setup without --no-install to install soju-tui for %s.\n' "$TARGET_USER"
+	else
+		printf '\nSetup complete without command installation. Run as %s:\n  %s\n' "$TARGET_USER" "$TUI_BINARY"
+	fi
 fi
 printf 'The first TUI run will show the discovered hostname, admin socket, TLS certificate, config, and sojuctl paths for confirmation.\n'

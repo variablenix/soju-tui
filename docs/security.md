@@ -31,6 +31,13 @@ publishing job and uses the short-lived GitHub Actions token. It does not
 require a stored token or private GPG key. Local release builds continue to
 require a signed tag.
 
+CI exercises the release installer on Linux with a real unprivileged account.
+Downloaded public release artifacts use a root-owned, traversable temporary
+directory so the selected administrator can execute the candidate for version
+verification. A single cleanup handler removes release and atomic-install
+temporary files on success, failure, or interruption. Setup always creates its
+release workspace under `/tmp` rather than trusting an inherited `TMPDIR`.
+
 ## Command execution
 
 Every operation uses an argument vector with `exec.CommandContext`. User input
