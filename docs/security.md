@@ -60,6 +60,12 @@ Changing a network from SASL EXTERNAL/CertFP to SASL PLAIN requires the exact
 phrase `SET SASL PLAIN`. Resetting and erasing all saved SASL credentials uses
 the separate `RESET SASL` phrase.
 
+Soju account password replacement is authorized by administrative-socket
+access; `sojuctl` does not request or verify the old password. The dedicated
+change workflow therefore makes the operator confirm the selected account and
+enter the new password twice. Administrator reset additionally requires the
+exact phrase `RESET USER PASSWORD USERNAME` and uses destructive coloring.
+
 Privilege grants, server TLS pin changes, connect commands, client-device trust,
 server-wide notices, limit overrides, and explicit clears also use typed
 phrases. Lower-risk creates and edits still require a `y` confirmation after
@@ -74,8 +80,9 @@ certificate registration retain their exact typed phrase.
 ## Secrets
 
 The saved profile contains only config and executable paths and is created with
-mode `0600`. Passwords are held only for the operation that needs them and are
-redacted from previews and captured output.
+mode `0600`. Passwords are held only for the operation that needs them, must be
+entered twice for account replacement, and are redacted from previews and
+captured output.
 
 Network connect commands and raw network commands are redacted in their
 entirety because operators commonly use them for NickServ credentials. They

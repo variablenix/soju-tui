@@ -16,9 +16,9 @@ packages do not patch `service.go` or `cmd/sojuctl` in either checked release.
 
 The compatibility suite contains regression fixtures for both command sets and
 also builds and starts each upstream release in an isolated temporary directory.
-It exercises the users, networks, channels, CertFP, SASL, deletion-confirmation,
-and status contracts used by the TUI. The script verifies each tag's pinned
-upstream commit before building it.
+It exercises the users (including password replacement), networks, channels,
+CertFP, SASL, deletion-confirmation, and status contracts used by the TUI. The
+script verifies each tag's pinned upstream commit before building it.
 
 ## Runtime capability detection
 

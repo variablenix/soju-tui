@@ -8,7 +8,8 @@ it is not an IRC chat client and never opens channels or displays messages.
 
 ## Highlights
 
-- Manage users, networks, channels, SASL, certificates, notices, and debugging.
+- Manage users—including dedicated password change and administrator-reset
+  workflows—networks, channels, SASL, certificates, notices, and debugging.
 - View the Soju host TLS certificate, including issuer, names, validity, hostname
   match, fingerprint, and PEM chain length.
 - Select freshly discovered users, networks, and channels instead of retyping
