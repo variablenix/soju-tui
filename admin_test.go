@@ -1,9 +1,21 @@
 package main
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 )
+
+func setAdminField(t *testing.T, form *AdminForm, label, value string) {
+	t.Helper()
+	for index := range form.Fields {
+		if form.Fields[index].Label == label {
+			form.Fields[index].Value = value
+			return
+		}
+	}
+	t.Fatalf("field %q not found in %s form", label, form.Kind)
+}
 
 func TestAdminUserCreateUsesArgvAndRedactsPassword(t *testing.T) {
 	form, err := newAdminForm("user-create")
@@ -122,6 +134,105 @@ func TestAdminRejectsPasswordWithDisablePassword(t *testing.T) {
 	form.Fields[7].Value = "true"
 	if _, err := buildAdminOperation("/etc/soju/config", form); err == nil {
 		t.Fatal("expected password/disable-password conflict")
+	}
+}
+
+func TestChangePasswordRequiresMatchingConfirmationAndRedactsSecret(t *testing.T) {
+	form, err := newAdminForm("user-password-change")
+	if err != nil {
+		t.Fatal(err)
+	}
+	setAdminField(t, form, "Username", "alice")
+	setAdminField(t, form, "New password", "correct horse battery staple")
+	setAdminField(t, form, "Confirm password", "different password")
+	if _, err := buildAdminOperation("/etc/soju/config", form); err == nil || !strings.Contains(err.Error(), "do not match") {
+		t.Fatalf("expected mismatched-password rejection, got %v", err)
+	}
+
+	setAdminField(t, form, "Confirm password", "correct horse battery staple")
+	op, err := buildAdminOperation("/etc/soju/config", form)
+	if err != nil {
+		t.Fatal(err)
+	}
+	wantArgs := []string{"user", "update", "alice", "-password", "correct horse battery staple"}
+	if strings.Join(op.Args, "\x00") != strings.Join(wantArgs, "\x00") {
+		t.Fatalf("password change argv = %#v, want %#v", op.Args, wantArgs)
+	}
+	if op.ConfirmationImpact != adminConfirmationChange || op.ConfirmPhrase != "" {
+		t.Fatalf("password change confirmation = impact %v phrase %q", op.ConfirmationImpact, op.ConfirmPhrase)
+	}
+	if strings.Contains(op.Preview, "correct horse battery staple") || !strings.Contains(op.Preview, "••••••") {
+		t.Fatalf("password leaked in preview: %q", op.Preview)
+	}
+}
+
+func TestResetUserPasswordRequiresTypedConfirmationAndRedactsSecret(t *testing.T) {
+	form, err := newAdminForm("user-password-reset")
+	if err != nil {
+		t.Fatal(err)
+	}
+	setAdminField(t, form, "Username", "alice")
+	setAdminField(t, form, "New password", "replacement secret")
+	setAdminField(t, form, "Confirm password", "replacement secret")
+	op, err := buildAdminOperation("/etc/soju/config", form)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if op.ConfirmationImpact != adminConfirmationDestructive {
+		t.Fatalf("password reset impact = %v, want destructive", op.ConfirmationImpact)
+	}
+	if op.ConfirmPhrase != "RESET USER PASSWORD alice" {
+		t.Fatalf("password reset phrase = %q", op.ConfirmPhrase)
+	}
+	if strings.Contains(op.Preview, "replacement secret") || !strings.Contains(op.Preview, "••••••") {
+		t.Fatalf("replacement password leaked in preview: %q", op.Preview)
+	}
+}
+
+func TestCancelledPasswordChangeDoesNotRetainSecret(t *testing.T) {
+	app := newTestApp()
+	form, err := newAdminForm("user-password-change")
+	if err != nil {
+		t.Fatal(err)
+	}
+	setAdminField(t, form, "Username", "alice")
+	setAdminField(t, form, "New password", "correct horse battery staple")
+	setAdminField(t, form, "Confirm password", "correct horse battery staple")
+	op, err := buildAdminOperation("/etc/soju/config", form)
+	if err != nil {
+		t.Fatal(err)
+	}
+	app.admin.Confirm = &AdminConfirmation{Operation: op}
+	app.adminHandleKey("esc", 0)
+	if app.admin.Confirm != nil {
+		t.Fatal("cancelled confirmation was retained")
+	}
+	state := fmt.Sprintf("%#v", app.admin)
+	if strings.Contains(state, "correct horse battery staple") {
+		t.Fatal("cancelled password remained in application state")
+	}
+	app.close()
+}
+
+func TestGenericUserUpdateRequiresPasswordConfirmation(t *testing.T) {
+	form, err := newAdminForm("user-update")
+	if err != nil {
+		t.Fatal(err)
+	}
+	setAdminField(t, form, "Username", "alice")
+	setAdminField(t, form, "New password", "new secret")
+	setAdminField(t, form, "Confirm new password", "wrong secret")
+	if _, err := buildAdminOperation("/etc/soju/config", form); err == nil || !strings.Contains(err.Error(), "do not match") {
+		t.Fatalf("expected mismatched-password rejection, got %v", err)
+	}
+
+	setAdminField(t, form, "Confirm new password", "new secret")
+	op, err := buildAdminOperation("/etc/soju/config", form)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !containsArg(op.Args, "-password") || strings.Contains(op.Preview, "new secret") {
+		t.Fatalf("generic password update was not safely built: %#v preview=%q", op.Args, op.Preview)
 	}
 }
 

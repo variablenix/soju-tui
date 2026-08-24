@@ -14,6 +14,23 @@ sojuctl -config /etc/soju/config user status USER
 sojuctl -config /etc/soju/config user run USER network status
 ```
 
+## Users
+
+Soju uses the same administrative command to change the selected account's own
+password or reset another user's password:
+
+```sh
+sojuctl -config /etc/soju/config user update USER -password NEW_PASSWORD
+```
+
+The distinction is a Soju-TUI safety boundary: **Change my password** prefers a
+matching local Unix username and requires ordinary change approval, while
+**Reset user password** requires the exact phrase
+`RESET USER PASSWORD USERNAME`. In both cases the password is entered twice,
+redacted from the preview and captured output, and never saved in the profile.
+Administrative-socket access authorizes the replacement; the old password is
+not supplied to `sojuctl`.
+
 ## Networks
 
 ```sh

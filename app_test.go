@@ -417,7 +417,7 @@ func TestParseSojuUsernames(t *testing.T) {
 
 func TestUserTargetFormsReceiveDiscoverableAndCustomSelector(t *testing.T) {
 	userTargetedKinds := []string{
-		"user-status-specific", "user-update", "user-identity-update", "user-delete",
+		"user-status-specific", "user-password-change", "user-password-reset", "user-update", "user-identity-update", "user-delete",
 		"network-create", "network-update", "network-delete", "network-status", "network-quote",
 		"channel-create", "channel-update", "channel-delete", "channel-status",
 		"cert-generate", "cert-fingerprint",
@@ -448,6 +448,33 @@ func TestUserTargetFormsReceiveDiscoverableAndCustomSelector(t *testing.T) {
 		if adminFormRequiresExistingUser(kind) {
 			t.Fatalf("%s unexpectedly requires an existing user", kind)
 		}
+	}
+}
+
+func TestChangePasswordPrefersMatchingLocalUsername(t *testing.T) {
+	app := newTestApp()
+	defer app.close()
+	app.localUsername = "alice"
+	if err := app.adminOpenFormWithUsersLocked("user-password-change", []string{"ak", "alice", "operator"}); err != nil {
+		t.Fatal(err)
+	}
+	field := app.admin.Form.Fields[0]
+	if field.Value != "alice" || strings.Join(field.Options, ",") != "alice,ak,operator" {
+		t.Fatalf("preferred account selector = %#v", field)
+	}
+}
+
+func TestPreferExactUserDoesNotMutateDiscoveryOrder(t *testing.T) {
+	users := []string{"ak", "alice", "operator"}
+	ordered := preferExactUser(users, "alice")
+	if strings.Join(ordered, ",") != "alice,ak,operator" {
+		t.Fatalf("preferred users = %#v", ordered)
+	}
+	if strings.Join(users, ",") != "ak,alice,operator" {
+		t.Fatalf("discovered users were mutated: %#v", users)
+	}
+	if got := preferExactUser(users, "missing"); strings.Join(got, ",") != "ak,alice,operator" {
+		t.Fatalf("missing preference changed order: %#v", got)
 	}
 }
 

@@ -113,6 +113,8 @@ EOF
 	assert_contains "$output" "created user"
 	output=$("$release_dir/sojuctl" -config "$config" user status)
 	assert_contains "$output" "compat-admin (admin):"
+	output=$("$release_dir/sojuctl" -config "$config" user update compat-admin -password compat-secret)
+	assert_contains "$output" "updated user"
 	output=$("$release_dir/sojuctl" -config "$config" user run compat-admin network create -addr ircs://127.0.0.1:9 -name compat -enabled false)
 	assert_contains "$output" "created network"
 	output=$("$release_dir/sojuctl" -config "$config" user run compat-admin network status)

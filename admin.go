@@ -109,6 +109,8 @@ func adminMenuItems() []AdminMenuItem {
 		{Label: "List all users", Kind: "user-status", Command: "user status"},
 		{Label: "Show specific user", Kind: "user-status-specific", Command: "user status"},
 		{Label: "Create user", Kind: "user-create", Command: "user create"},
+		{Label: "Change my password", Kind: "user-password-change", Command: "user update"},
+		{Label: "Reset user password", Kind: "user-password-reset", Command: "user update"},
 		{Label: "Update user", Kind: "user-update", Command: "user update"},
 		{Label: "Update user IRC identity", Kind: "user-identity-update", Command: "user update"},
 		{Label: "Delete user", Kind: "user-delete", Command: "user delete"},
@@ -151,7 +153,8 @@ func sojuTUIHelp() []string {
 		"  Letter navigation is inactive in forms and confirmations so typed input stays literal.",
 		"",
 		"USERS",
-		"  List or inspect users; create, update, disable, promote, or delete an account; update IRC identity defaults.",
+		"  List or inspect users; create, update, disable, promote, or delete an account; change or reset passwords; update IRC identity defaults.",
+		"  Password replacement is authorized by the Soju admin socket and does not require or verify the old password.",
 		"",
 		"NETWORKS & CHANNELS",
 		"  Discover and select each user's saved networks and channels before inspecting or changing them. Raw network commands are high-risk and redacted.",
@@ -417,7 +420,7 @@ func (a *App) adminHelpKeyLocked(key string, width, height int) {
 
 func adminFormRequiresExistingUser(kind string) bool {
 	switch kind {
-	case "user-status-specific", "user-update", "user-identity-update", "user-delete",
+	case "user-status-specific", "user-password-change", "user-password-reset", "user-update", "user-identity-update", "user-delete",
 		"network-create", "network-update", "network-delete", "network-status", "network-quote",
 		"channel-create", "channel-update", "channel-delete", "channel-status",
 		"cert-generate", "cert-fingerprint",
@@ -497,14 +500,37 @@ func (a *App) adminOpenFormWithUsersLocked(kind string, users []string) error {
 	if err != nil {
 		return err
 	}
+	if kind == "user-password-change" {
+		users = preferExactUser(users, a.localUsername)
+	}
 	if err := addUserChoices(form, users); err != nil {
 		return err
 	}
 	a.admin.Form = form
 	a.admin.View = adminForm
 	a.admin.Confirm = nil
-	a.setStatusLocked("Space cycles discovered users · typing selects a specific username", 0)
+	if kind == "user-password-change" {
+		a.setStatusLocked("Confirm your Soju account · local username is preferred when it matches", 0)
+	} else {
+		a.setStatusLocked("Space cycles discovered users · typing selects a specific username", 0)
+	}
 	return nil
+}
+
+func preferExactUser(users []string, preferred string) []string {
+	ordered := append([]string(nil), users...)
+	if preferred == "" {
+		return ordered
+	}
+	for index, candidate := range ordered {
+		if candidate != preferred {
+			continue
+		}
+		copy(ordered[1:index+1], ordered[0:index])
+		ordered[0] = candidate
+		break
+	}
+	return ordered
 }
 
 func adminFormRequiresExistingNetwork(kind string) bool {
@@ -664,7 +690,7 @@ func addUserChoices(form *AdminForm, users []string) error {
 		return errors.New("no Soju users available")
 	}
 	targetLabel := "User"
-	if form.Kind == "user-update" || form.Kind == "user-delete" {
+	if form.Kind == "user-password-change" || form.Kind == "user-password-reset" || form.Kind == "user-update" || form.Kind == "user-delete" {
 		targetLabel = "Username"
 	}
 	for index := range form.Fields {
@@ -746,10 +772,23 @@ func newAdminForm(kind string) (*AdminForm, error) {
 			field("Max networks", "-1", false, false, "text", "0 none, -1 global default"),
 			presenceField("Disable password", "disable password authentication for this account"),
 		}}, nil
+	case "user-password-change":
+		return &AdminForm{Kind: kind, Title: "Change my password", Fields: []AdminField{
+			field("Username", "", true, false, "text", "confirm your Soju account; the matching local username is preferred when available"),
+			field("New password", "", true, true, "text", "new bouncer login password"),
+			field("Confirm password", "", true, true, "text", "enter the new password again"),
+		}}, nil
+	case "user-password-reset":
+		return &AdminForm{Kind: kind, Title: "Reset user password", Fields: []AdminField{
+			field("Username", "", true, false, "text", "account whose bouncer login password will be replaced"),
+			field("New password", "", true, true, "text", "replacement bouncer login password"),
+			field("Confirm password", "", true, true, "text", "enter the replacement password again"),
+		}}, nil
 	case "user-update":
 		return &AdminForm{Kind: kind, Title: "Update soju user", Fields: []AdminField{
 			field("Username", "", true, false, "text", "account to update"),
 			field("New password", "", false, true, "text", "leave blank to keep current"),
+			field("Confirm new password", "", false, true, "text", "required when setting a new password"),
 			optionalBool("Admin"),
 			optionalBool("Enabled"),
 			field("Max networks", "", false, false, "text", "leave blank to keep current"),
@@ -1321,6 +1360,13 @@ func buildAdminOperation(config string, form *AdminForm) (AdminOperation, error)
 			return AdminOperation{}, err
 		}
 		refresh = []string{"user", "status"}
+	case "user-password-change", "user-password-reset":
+		if values["New password"] != values["Confirm password"] {
+			return AdminOperation{}, errors.New("new password and confirmation do not match")
+		}
+		args = []string{"user", "update", values["Username"], "-password", values["New password"]}
+		secrets = append(secrets, values["New password"])
+		refresh = []string{"user", "status", values["Username"]}
 	case "user-update":
 		if values["Max networks"] != "" {
 			if _, err := parseMaxNetworks(values["Max networks"]); err != nil {
@@ -1329,6 +1375,9 @@ func buildAdminOperation(config string, form *AdminForm) (AdminOperation, error)
 		}
 		if values["Disable password"] == "true" && values["New password"] != "" {
 			return AdminOperation{}, errors.New("new password must be empty when Disable password is true")
+		}
+		if values["New password"] != values["Confirm new password"] {
+			return AdminOperation{}, errors.New("new password and confirmation do not match")
 		}
 		args = []string{"user", "update", values["Username"]}
 		if values["New password"] != "" {
@@ -1527,7 +1576,7 @@ func buildAdminOperation(config string, form *AdminForm) (AdminOperation, error)
 	switch form.Kind {
 	case "user-create", "network-create", "channel-create", "cert-generate", "device-cert-create":
 		op.ConfirmationImpact = adminConfirmationAddition
-	case "user-delete", "network-delete", "channel-delete", "sasl-reset", "device-cert-delete":
+	case "user-password-reset", "user-delete", "network-delete", "channel-delete", "sasl-reset", "device-cert-delete":
 		op.ConfirmationImpact = adminConfirmationDestructive
 	}
 	switch form.Kind {
@@ -1548,6 +1597,8 @@ func buildAdminOperation(config string, form *AdminForm) (AdminOperation, error)
 		if values["Admin"] != "" {
 			op.ConfirmPhrase = "CHANGE USER ADMIN STATUS"
 		}
+	case "user-password-reset":
+		op.ConfirmPhrase = "RESET USER PASSWORD " + values["Username"]
 	case "user-delete":
 		op.ConfirmPhrase = "DELETE USER " + values["Username"]
 	case "network-delete":

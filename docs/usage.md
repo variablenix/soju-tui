@@ -78,8 +78,8 @@ can still be entered manually.
 The menu covers the administration commands reported by the running server:
 
 - server status, notices, debug logging, and BouncerServ help;
-- all-user and specific-user status, account updates, IRC identity updates, and
-  deletion;
+- all-user and specific-user status, dedicated password changes and resets,
+  account updates, IRC identity updates, and deletion;
 - per-user networks and channels;
 - upstream SASL PLAIN and EXTERNAL/CertFP configuration;
 - downstream client device certificates when supported by Soju;
@@ -88,6 +88,26 @@ The menu covers the administration commands reported by the running server:
 Read-only operations run immediately. Mutations first show the exact redacted
 argument preview. Ordinary changes require `y`; destructive or high-risk
 changes require the displayed phrase exactly.
+
+## Password changes
+
+**Change my password** replaces the bouncer-login password for one discovered
+Soju account. The selector prefers an exact, case-sensitive match for the
+current local Unix username when one exists, but the operator must confirm the
+actual Soju account before continuing. This preference is not persisted and
+does not define the administrator identity.
+
+Soju authorizes this operation through access to its administrative socket, so
+there is no old-password prompt or old-password verification. The new password
+must be entered twice, is redacted from the preview and captured output, and is
+never written to the local profile.
+
+**Reset user password** provides the same replacement for any discovered user,
+but treats it as a destructive administrator action and requires the exact
+phrase `RESET USER PASSWORD USERNAME`. Existing clients for that account must
+be updated with the replacement password. Both workflows use Soju's supported
+`user update USER -password ...` command; they are separate TUI actions to make
+the target and operational intent unmistakable.
 
 ## Network updates
 

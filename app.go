@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"os/user"
 	"strings"
 	"sync"
 	"time"
@@ -113,24 +114,37 @@ type App struct {
 	quit     bool
 	status   string
 	statusAt time.Time
+	// localUsername is an in-memory convenience used to prefer the matching
+	// Soju account in the "Change my password" selector. It is not persisted
+	// and does not establish the Soju administrator identity.
+	localUsername string
 }
 
 func newAdminApp(backend *SojuCtl) *App {
 	ctx, cancel := context.WithCancel(context.Background())
 	a := &App{
-		ctx:     ctx,
-		cancel:  cancel,
-		backend: backend,
-		admin:   AdminState{View: adminOutput},
-		results: make(chan adminResult, 16),
-		done:    make(chan struct{}),
-		status:  "checking sojuctl admin socket...",
+		ctx:           ctx,
+		cancel:        cancel,
+		backend:       backend,
+		admin:         AdminState{View: adminOutput},
+		results:       make(chan adminResult, 16),
+		done:          make(chan struct{}),
+		status:        "checking sojuctl admin socket...",
+		localUsername: currentLocalUsername(),
 	}
 	op := makeAdminOperation(backend.Config, "Detect global Soju capabilities", []string{"help"}, nil, false, nil)
 	op.FollowUpKind = "startup-global-help"
 	op.Quiet = true
 	a.requestOperation(op)
 	return a
+}
+
+func currentLocalUsername() string {
+	current, err := user.Current()
+	if err != nil {
+		return ""
+	}
+	return current.Username
 }
 
 func (a *App) close() {
