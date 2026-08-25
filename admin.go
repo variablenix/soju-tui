@@ -571,7 +571,7 @@ func adminFormRequiresExistingChannel(kind string) bool {
 }
 
 func networkSelectionAllowsAll(kind string) bool {
-	return kind == "channel-status" || kind == "cert-fingerprint"
+	return kind == "channel-status" || kind == "cert-fingerprint" || kind == "sasl-status"
 }
 
 func networkTargets(networks []NetworkStatus) []string {
@@ -991,6 +991,10 @@ func (a *App) adminSubmitFormLocked() {
 		a.adminStartCertFingerprintBatchLocked(form)
 		return
 	}
+	if form.Kind == "sasl-status" && (formValue(form, "Network") == "" || formValue(form, "Network") == allNetworksSelection) {
+		a.adminStartSASLStatusBatchLocked(form)
+		return
+	}
 	op, err := buildAdminOperation(a.backend.Config, form)
 	if err != nil {
 		a.setStatusLocked(err.Error(), 5e9)
@@ -1080,6 +1084,20 @@ func certFingerprintBatchOperations(config, user string, networks []string) []Ad
 	return operations
 }
 
+func saslStatusBatchOperations(config, user string, networks []string) []AdminOperation {
+	operations := make([]AdminOperation, 0, len(networks))
+	for _, network := range networks {
+		if network == "" || network == allNetworksSelection {
+			continue
+		}
+		args := []string{"user", "run", user, "sasl", "status", "-network", network}
+		op := makeAdminOperation(config, "Show SASL status", args, nil, false, nil)
+		op.FollowUpKind, op.TargetUser, op.TargetNetwork, op.Quiet = "sasl-status-batch", user, network, true
+		operations = append(operations, op)
+	}
+	return operations
+}
+
 func (a *App) adminStartCertFingerprintBatchLocked(form *AdminForm) {
 	user := formValue(form, "User")
 	var networks []string
@@ -1099,6 +1117,32 @@ func (a *App) adminStartCertFingerprintBatchLocked(form *AdminForm) {
 	}
 	a.admin.Form = nil
 	a.admin.Output = append(a.admin.Output, "UPSTREAM CERTFP FINGERPRINTS FOR USER: "+user)
+	a.admin.PendingBatch = append([]AdminOperation(nil), operations[1:]...)
+	a.admin.BatchFailures = 0
+	a.mu.Unlock()
+	a.requestOperation(operations[0])
+	a.mu.Lock()
+}
+
+func (a *App) adminStartSASLStatusBatchLocked(form *AdminForm) {
+	user := formValue(form, "User")
+	var networks []string
+	for _, field := range form.Fields {
+		if field.Label == "Network" {
+			for _, option := range field.Options {
+				if option != allNetworksSelection {
+					networks = append(networks, option)
+				}
+			}
+		}
+	}
+	operations := saslStatusBatchOperations(a.backend.Config, user, networks)
+	if user == "" || len(operations) == 0 {
+		a.setStatusLocked("No discovered networks are available for SASL inspection", 5e9)
+		return
+	}
+	a.admin.Form = nil
+	a.admin.Output = append(a.admin.Output, "SASL STATUS FOR USER: "+user)
 	a.admin.PendingBatch = append([]AdminOperation(nil), operations[1:]...)
 	a.admin.BatchFailures = 0
 	a.mu.Unlock()

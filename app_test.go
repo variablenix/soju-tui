@@ -665,6 +665,25 @@ func TestCertFingerprintBatchFormatsConfiguredAndMissingNetworks(t *testing.T) {
 	}
 }
 
+func TestSASLStatusBatchFormatsEveryNetwork(t *testing.T) {
+	app := newTestApp()
+	defer app.close()
+	app.processResult(adminResult{
+		Operation: AdminOperation{FollowUpKind: "sasl-status-batch", TargetNetwork: "libera", Quiet: true},
+		Output:    "SASL PLAIN enabled\nAuthenticated on upstream network with account \"alice\"\n",
+	})
+	app.processResult(adminResult{
+		Operation: AdminOperation{FollowUpKind: "sasl-status-batch", TargetNetwork: "ouch", Quiet: true},
+		Output:    "SASL EXTERNAL (CertFP) enabled\nUpstream account not reported to Soju\n",
+	})
+	output := strings.Join(app.admin.Output, "\n")
+	for _, want := range []string{"SASL NETWORK: libera", "Authenticated on upstream network with account \"alice\"", "SASL NETWORK: ouch", "Upstream account not reported to Soju"} {
+		if !strings.Contains(output, want) {
+			t.Fatalf("batch output missing %q: %s", want, output)
+		}
+	}
+}
+
 func TestCertificatePreflightRequiresReplacementPhraseWhenExisting(t *testing.T) {
 	app := newTestApp()
 	planned := AdminOperation{Summary: "Generate upstream CertFP", Mutating: true}
