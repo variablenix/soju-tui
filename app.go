@@ -369,6 +369,35 @@ func (a *App) processResult(result adminResult) {
 		}
 		return
 	}
+	if result.Operation.FollowUpKind == "sasl-status-batch" {
+		a.admin.Output = append(a.admin.Output, "SASL NETWORK: "+result.Operation.TargetNetwork)
+		if result.Err != nil {
+			a.admin.BatchFailures++
+			a.admin.Output = append(a.admin.Output, "ERROR: "+redactText(result.Err.Error(), result.Operation.Secrets))
+		}
+		if strings.TrimSpace(output) != "" {
+			a.admin.Output = append(a.admin.Output, strings.TrimSpace(output))
+		} else if result.Err == nil {
+			a.admin.Output = append(a.admin.Output, "  No SASL status returned")
+		}
+		a.admin.Output = append(a.admin.Output, "────────────────────────────────")
+		a.admin.Output = trimOutput(a.admin.Output)
+		if len(a.admin.PendingBatch) > 0 {
+			next := a.admin.PendingBatch[0]
+			a.admin.PendingBatch = a.admin.PendingBatch[1:]
+			a.mu.Unlock()
+			a.requestOperation(next)
+			a.mu.Lock()
+			a.setStatusLocked("checking SASL status across saved networks...", 0)
+			return
+		}
+		if a.admin.BatchFailures > 0 {
+			a.setStatusLocked("SASL inspection completed with errors", 0)
+		} else {
+			a.setStatusLocked("SASL inspection completed for all saved networks", 4*time.Second)
+		}
+		return
+	}
 	if result.Operation.FollowUpKind == "cert-generate-preflight" {
 		planned := a.admin.PendingOperation
 		a.admin.PendingOperation = nil

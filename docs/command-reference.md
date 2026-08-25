@@ -87,8 +87,9 @@ authentication failure. Confirm the effective account with NickServ or WHOIS
 and inspect the Soju log for an explicit SASL failure.
 
 The `-network` value must be an actual saved network name or address. `*` does
-not mean all networks. The TUI's **All networks** fingerprint view discovers
-the real targets and invokes the read-only command separately for each one.
+not mean all networks. The TUI's **All networks** CertFP and SASL status views
+discover the real targets and invoke the read-only command separately for each
+one; selecting a specific network still runs only that network's status check.
 
 ## Corrections to common invalid forms
 

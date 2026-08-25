@@ -367,6 +367,21 @@ func TestCertFingerprintBatchCoversEveryDiscoveredNetwork(t *testing.T) {
 	}
 }
 
+func TestSASLStatusBatchCoversEveryDiscoveredNetwork(t *testing.T) {
+	ops := saslStatusBatchOperations("/etc/soju/config", "alice", []string{allNetworksSelection, "libera", "ouch"})
+	if len(ops) != 2 {
+		t.Fatalf("operations = %#v", ops)
+	}
+	for index, want := range []string{"libera", "ouch"} {
+		if ops[index].TargetNetwork != want || !ops[index].Quiet || ops[index].FollowUpKind != "sasl-status-batch" {
+			t.Fatalf("operation %d = %#v", index, ops[index])
+		}
+		if got := strings.Join(ops[index].Args, " "); got != "user run alice sasl status -network "+want {
+			t.Fatalf("operation %d args = %q", index, got)
+		}
+	}
+}
+
 func TestParseUserDeleteConfirmation(t *testing.T) {
 	args, username, ok := parseUserDeleteConfirmation(`To confirm user deletion, send "user delete alice 0123ab"`, "alice")
 	if !ok || username != "alice" || len(args) != 4 || args[2] != "alice" || args[3] != "0123ab" {
@@ -723,6 +738,25 @@ func TestChannelStatusCanListAllNetworks(t *testing.T) {
 	}
 	if containsArg(op.Args, "-network") {
 		t.Fatalf("All networks unexpectedly added a literal filter: %#v", op.Args)
+	}
+}
+
+func TestSASLStatusCanListAllNetworks(t *testing.T) {
+	form, err := newAdminForm("sasl-status")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !networkSelectionAllowsAll(form.Kind) {
+		t.Fatal("SASL status does not allow all-network selection")
+	}
+	if err := addNetworkChoices(form, "alice", []NetworkStatus{
+		{Name: "libera"},
+		{Name: "ouch"},
+	}, true); err != nil {
+		t.Fatal(err)
+	}
+	if got := form.Fields[1]; got.Kind != "network" || got.Value != allNetworksSelection || len(got.Options) != 3 {
+		t.Fatalf("network selector = %#v", got)
 	}
 }
 
