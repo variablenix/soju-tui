@@ -73,6 +73,27 @@ func isUserStatusArgs(args []string) bool {
 	return len(args) == 2 && args[0] == "user" && args[1] == "status"
 }
 
+func isSASLStatusArgs(args []string) bool {
+	return len(args) >= 5 &&
+		args[0] == "user" &&
+		args[1] == "run" &&
+		args[3] == "sasl" &&
+		args[4] == "status"
+}
+
+func clarifySASLStatusOutput(output string) string {
+	const upstreamMessage = "Unauthenticated on upstream network"
+	if !strings.Contains(output, upstreamMessage) {
+		return output
+	}
+
+	clarified := strings.Replace(output, upstreamMessage, "Upstream account not reported to Soju", 1)
+	return strings.TrimRight(clarified, "\n") + "\n\n" +
+		"SOJU-TUI NOTE: Soju records the upstream account after numeric 900 (RPL_LOGGEDIN). " +
+		"Some IRC servers establish or later recognize an account without sending numeric 900, including some CertFP flows, so this result does not prove authentication failed. " +
+		"Verify the account with NickServ/WHOIS and check the Soju log for an explicit SASL failure."
+}
+
 func isCertFPNotConfigured(output string) bool {
 	return strings.Contains(strings.ToLower(output), "certfp not set up")
 }

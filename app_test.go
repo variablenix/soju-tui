@@ -91,6 +91,35 @@ func TestUnrelatedFailureHasNoPermissionHint(t *testing.T) {
 	}
 }
 
+func TestSASLStatusClarifiesMissingUpstreamAccountReport(t *testing.T) {
+	app := newTestApp()
+	app.processResult(adminResult{
+		Operation: AdminOperation{Args: []string{"user", "run", "ak", "sasl", "status", "-network", "AlienIRCd"}},
+		Output:    "SASL EXTERNAL (CertFP) enabled\nUnauthenticated on upstream network\n",
+	})
+
+	output := strings.Join(app.admin.Output, "\n")
+	if strings.Contains(output, "Unauthenticated on upstream network") {
+		t.Fatalf("ambiguous upstream status remained in output: %q", output)
+	}
+	for _, expected := range []string{
+		"Upstream account not reported to Soju",
+		"numeric 900 (RPL_LOGGEDIN)",
+		"does not prove authentication failed",
+	} {
+		if !strings.Contains(output, expected) {
+			t.Fatalf("clarified SASL status missing %q: %q", expected, output)
+		}
+	}
+}
+
+func TestSASLStatusPreservesAuthenticatedReport(t *testing.T) {
+	input := "SASL EXTERNAL (CertFP) enabled\nAuthenticated on upstream network with account \"ak\"\n"
+	if output := clarifySASLStatusOutput(input); output != input {
+		t.Fatalf("authenticated status changed:\n got %q\nwant %q", output, input)
+	}
+}
+
 func TestTypedConfirmationRequiresExactPhrase(t *testing.T) {
 	app := newTestApp()
 	app.backend = &SojuCtl{Path: "/bin/false"}

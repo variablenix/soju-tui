@@ -194,6 +194,9 @@ func (a *App) processResult(result adminResult) {
 		a.admin.OutputScroll = 0
 	}
 	output := redactText(result.Output, result.Operation.Secrets)
+	if result.Err == nil && isSASLStatusArgs(result.Operation.Args) {
+		output = clarifySASLStatusOutput(output)
+	}
 	if !result.Operation.Quiet && strings.TrimSpace(output) != "" {
 		a.admin.Output = append(a.admin.Output, strings.TrimRight(output, "\n"))
 	}
