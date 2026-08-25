@@ -77,6 +77,15 @@ saved network certificate. The TUI checks first, displays an existing
 fingerprint, and requires a different exact phrase for creation versus
 replacement.
 
+For Soju v0.9.0 and v0.10.1, `sasl status` considers an upstream account
+authenticated only after Soju records numeric 900 (`RPL_LOGGEDIN`). Some IRC
+servers establish or later recognize an account without sending numeric 900,
+including some CertFP flows. When Soju returns `Unauthenticated on upstream
+network`, the TUI therefore presents the state as **Upstream account not
+reported to Soju** and explains that the result does not by itself prove
+authentication failure. Confirm the effective account with NickServ or WHOIS
+and inspect the Soju log for an explicit SASL failure.
+
 The `-network` value must be an actual saved network name or address. `*` does
 not mean all networks. The TUI's **All networks** fingerprint view discovers
 the real targets and invokes the read-only command separately for each one.
