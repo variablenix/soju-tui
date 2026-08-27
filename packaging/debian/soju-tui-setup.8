@@ -1,0 +1,49 @@
+.TH SOJU-TUI-SETUP 8 "2026-08-27" "soju-tui" "System Administration"
+.SH NAME
+soju-tui-setup \- explicitly configure local access to Soju's admin socket
+.SH SYNOPSIS
+.B sudo soju-tui-setup
+.BI --user " login"
+.RI [ options ]
+.SH DESCRIPTION
+.B soju-tui-setup
+discovers Soju's administrative Unix socket, previews a per-user ACL, and asks
+before granting the selected trusted local account access. On systemd hosts it
+installs a path unit that reapplies the ACL when Soju recreates the socket.
+.PP
+The Debian package does not run this command automatically. Installing,
+upgrading, or removing the package does not modify Soju, its configuration, its
+database, its users, socket ACLs, or systemd units.
+.SH OPTIONS
+.TP
+.BI --user " login"
+Local account to authorize. Required when it cannot be inferred from sudo.
+.TP
+.BI --config " path"
+Soju configuration path. The default is
+.IR /etc/soju/config .
+.TP
+.BI --socket " path"
+Override the administrative socket discovered from the Soju configuration.
+.TP
+.BI --sojuctl " path"
+Override the discovered sojuctl executable.
+.TP
+.B --dry-run
+Display the discovered settings and proposed ACL units without changing them.
+.TP
+.B --yes
+Accept package and ACL confirmation prompts.
+.TP
+.BR -h , " --help"
+Display command usage.
+.SH SECURITY
+Access to Soju's administrative socket grants control over all Soju users.
+Authorize only a trusted local administrator. The helper never makes the socket
+world-writable.
+.SH SEE ALSO
+.BR soju-tui (1),
+.BR sojuctl (1),
+.BR soju (1)
+.SH AUTHOR
+The soju-tui contributors.

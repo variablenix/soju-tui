@@ -1,0 +1,29 @@
+#!/bin/sh
+set -eu
+
+usage() {
+	cat <<'EOF'
+Usage: sudo soju-tui-setup --user USER [options]
+
+Explicitly configures one trusted local administrator's access to Soju's admin
+socket. This command never installs or replaces the package-managed TUI binary.
+
+Options:
+  --user USER       Local Linux account to authorize (default: sudo caller)
+  --config PATH     Soju config path (default: /etc/soju/config)
+  --socket PATH     Override the admin socket discovered from the config
+  --sojuctl PATH    Override the sojuctl executable
+  --dry-run         Show detected settings and proposed changes only
+  --yes             Accept package and ACL confirmation prompts
+  -h, --help        Show this help
+EOF
+}
+
+case "${1:-}" in
+-h | --help)
+	usage
+	exit 0
+	;;
+esac
+
+exec /usr/lib/soju-tui/scripts/setup.sh --configure-only "$@"

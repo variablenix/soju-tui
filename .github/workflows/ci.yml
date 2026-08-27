@@ -27,7 +27,7 @@ jobs:
     name: Verify
     if: ${{ github.server_url == 'https://github.com' }}
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 45
 
     steps:
       - name: Check out repository
@@ -72,7 +72,7 @@ jobs:
         run: go run golang.org/x/vuln/cmd/govulncheck@v1.7.0 ./...
 
       - name: Check shell helpers
-        run: shellcheck scripts/*.sh
+        run: shellcheck scripts/*.sh packaging/debian/soju-tui-setup
 
       - name: Test verified release setup as an unprivileged user
         run: ./scripts/test-setup-release.sh
@@ -81,7 +81,18 @@ jobs:
         run: go run github.com/rhysd/actionlint/cmd/actionlint@v1.7.7
 
       - name: Build static Linux artifacts
-        run: ./scripts/build.sh --target all --version ci-${{ github.sha }}
+        run: ./scripts/build.sh --target all --version 0.0.0+ci.${{ github.sha }}
+
+      - name: Build Debian packages
+        run: ./scripts/build-deb.sh
+
+      - name: Install Debian package validator
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y lintian
+
+      - name: Validate Debian packages and clean-host lifecycle
+        run: ./scripts/test-deb-packages.sh --containers
 
       - name: Upload Linux artifacts
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -92,6 +103,9 @@ jobs:
           path: |
             dist/soju-tui-linux-amd64
             dist/soju-tui-linux-arm64
+            dist/soju-tui_*_amd64.deb
+            dist/soju-tui_*_arm64.deb
+            dist/THIRD_PARTY_LICENSES
             dist/SHA256SUMS
             dist/BUILDINFO
 

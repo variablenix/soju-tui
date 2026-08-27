@@ -27,6 +27,26 @@ The Linux AMD64 and ARM64 artifacts produced by release builds use
 `CGO_ENABLED=0` and are statically linked. Select the artifact matching the
 host architecture.
 
+## Debian and Ubuntu package
+
+Release packages install `soju-tui` at `/usr/bin/soju-tui` and remain separate
+from manual `/usr/local/bin` installations. Package installation has no
+maintainer script: it does not modify Soju, ACLs, configuration, users, or
+systemd state.
+
+```sh
+sudo apt install ./soju-tui_VERSION-1_amd64.deb
+sudo soju-tui-setup --user "$(id -un)" --dry-run
+sudo soju-tui-setup --user "$(id -un)"
+soju-tui
+```
+
+The explicit setup helper is necessary only when the selected trusted account
+does not already have persistent access to Soju's administrative socket. It
+configures access and verifies `sojuctl`; it does not install or update the
+package. See [Debian and Ubuntu packages](debian-packages.md) for architecture,
+checksum, upgrade, removal, and path-precedence guidance.
+
 ## Production host TLS
 
 For production, configure Soju with a certificate from a publicly trusted CA,
@@ -39,7 +59,7 @@ It never runs Certbot, replaces host TLS files, reads the private key, or reload
 Soju. See [Certificate safety](certificates.md) before generating any upstream
 CertFP certificate.
 
-## Guided Linux setup
+## Guided manual Linux setup
 
 From the repository, preview the setup first:
 
@@ -53,12 +73,12 @@ Apply it when the discovered user, config, and socket are correct:
 ./scripts/setup.sh
 ```
 
-The wizard requests `sudo`, downloads the latest stable architecture-matched
-release from GitHub, verifies its SHA-256 manifest, installs ACL tools only with
-approval, grants the invoking account access to the admin socket, verifies
-`sojuctl`, and installs a systemd path unit that reapplies the ACL when Soju
-recreates the socket. It copies the verified binary to
-`/usr/local/bin/soju-tui` and verifies that command as the regular user. It
+The manual-install wizard requests `sudo`, downloads the latest stable
+architecture-matched release from GitHub, verifies its SHA-256 manifest,
+installs ACL tools only with approval, grants the invoking account access to the
+admin socket, verifies `sojuctl`, and installs a systemd path unit that
+reapplies the ACL when Soju recreates the socket. It copies the verified binary
+to `/usr/local/bin/soju-tui` and verifies that command as the regular user. It
 never makes the socket world-writable.
 
 The installed command is a root-owned copy rather than a symlink into the Git
@@ -80,8 +100,11 @@ from silently replacing the installed production command.
 
 Use the path that matches the host:
 
-- Standard first installation: preview with `./scripts/setup.sh --dry-run`,
-  apply with `./scripts/setup.sh`, then run `soju-tui`.
+- Standard manual installation: preview with `./scripts/setup.sh --dry-run`,
+  apply with `./scripts/setup.sh`, then run `soju-tui`. This manages the
+  `/usr/local/bin` command, not the Debian package.
+- Debian or Ubuntu package: install the matching `.deb`, then explicitly run
+  `sudo soju-tui-setup --user LOGIN` if socket access needs configuration.
 - Repeatable release installation: use `./scripts/setup.sh --release VERSION`
   to pin an exact GitHub release instead of following the latest stable one.
 - Existing managed installation: pull changes and rerun the same setup wizard;
@@ -93,6 +116,9 @@ Use the path that matches the host:
 - Repository-only operation: use `./scripts/setup.sh --no-install`; completion
   validates the selected release without installing a global command. Use
   `--binary` as well when you want to validate a local `dist/` artifact.
+- Access-only operation: `./scripts/setup.sh --configure-only` skips release
+  selection and binary validation. The packaged `soju-tui-setup` command uses
+  this mode so `dpkg` remains the sole owner of `/usr/bin/soju-tui`.
 - Custom command location: use
   `./scripts/setup.sh --install-path /opt/local/bin/soju-tui` with a trusted,
   root-owned directory already included in the user's `PATH`.

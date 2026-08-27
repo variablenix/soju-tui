@@ -14,7 +14,9 @@ that it is running on `https://github.com`.
 
 - `Verify` runs formatting, module verification, race tests, coverage,
   staticcheck, gosec, govulncheck, shellcheck, workflow validation, and both
-  static Linux builds.
+  static Linux builds. It packages AMD64 and ARM64 `.deb` artifacts, validates
+  their contents and architecture, and exercises install, upgrade, and removal
+  in clean Debian and Ubuntu containers.
 - `Soju Compatibility` starts isolated Soju v0.9.0 and v0.10.1 instances and
   verifies the `sojuctl` contract used by the TUI.
 - `Analyze Go` runs CodeQL.
@@ -45,8 +47,9 @@ from either side of that rewrite can therefore fast-forward to current `main`.
 
 Use **Actions > Release > Run workflow** and enter the intended semantic
 version without a `v` prefix. The workflow can run only from `main`. It repeats
-the production gates, builds AMD64 and ARM64 artifacts, generates checksums and
-build metadata, and publishes the tag and release as `github-actions[bot]`.
+the production gates, builds raw AMD64/ARM64 executables and matching Debian
+packages, generates checksums and build metadata, and publishes the tag and
+release as `github-actions[bot]`.
 
 The publishing job has only `contents: write`; verification jobs remain
 read-only. GitHub supplies a temporary repository-scoped token, so no personal

@@ -38,6 +38,27 @@ verification. A single cleanup handler removes release and atomic-install
 temporary files on success, failure, or interruption. Setup always creates its
 release workspace under `/tmp` rather than trusting an inherited `TMPDIR`.
 
+Debian packages install a root-owned executable at `/usr/bin/soju-tui`. They
+contain no `preinst`, `postinst`, `prerm`, or `postrm` scripts and no systemd
+unit, so package installation, upgrade, and removal cannot modify Soju or grant
+administrative access. Package contents include the guided
+`/usr/sbin/soju-tui-setup` helper, but it runs only when an administrator
+explicitly invokes it. The helper configures socket access without downloading,
+validating, or replacing a TUI binary, preserving `dpkg` ownership of
+`/usr/bin/soju-tui`.
+
+Release CI compares each packaged executable byte-for-byte with its verified
+raw architecture artifact, checks package paths and modes, rejects maintainer
+scripts and bundled systemd units, verifies release checksums, and exercises
+install, upgrade, and removal in clean Debian and Ubuntu containers. The ARM64
+package receives the same metadata and content validation when lifecycle
+containers execute on the AMD64 GitHub host. Dependency license notices are
+generated from the module metadata embedded in both binaries, and generation
+fails if their dependency versions differ or a module lacks a license file.
+The package documents its intentional static-Go Lintian exception; weekly
+vulnerability scans and release gates require rebuilding when the Go standard
+library or a linked module needs a security update.
+
 ## Command execution
 
 Every operation uses an argument vector with `exec.CommandContext`. User input
@@ -115,7 +136,8 @@ of guessing that no certificate exists.
 
 The TUI does not edit Soju's config, database, listeners, or service definition.
 The explicit system setup wizard is the only component that requests elevated
-access; normal TUI operation and `soju-tui -setup` never invoke `sudo`.
+access; normal TUI operation and `soju-tui -setup` never invoke `sudo`. Package
+maintainer scripts never invoke the wizard.
 
 Runtime-age inspection does not modify the Soju unit or journal permissions.
 Do not grant broad journal access solely for this cosmetic feature without

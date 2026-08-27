@@ -87,7 +87,7 @@ jobs:
         run: go run golang.org/x/vuln/cmd/govulncheck@v1.7.0 ./...
 
       - name: Check shell helpers
-        run: shellcheck scripts/*.sh
+        run: shellcheck scripts/*.sh packaging/debian/soju-tui-setup
 
       - name: Test verified release setup as an unprivileged user
         run: ./scripts/test-setup-release.sh
@@ -101,7 +101,7 @@ jobs:
     permissions:
       contents: read
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 45
 
     steps:
       - name: Check out repository
@@ -127,7 +127,7 @@ jobs:
     permissions:
       contents: write
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 45
 
     steps:
       - name: Check out repository
@@ -185,9 +185,20 @@ jobs:
           RELEASE_VERSION: ${{ steps.release.outputs.version }}
         run: ./scripts/build.sh --target all --version "$RELEASE_VERSION" --release --github-actions-release
 
+      - name: Build Debian packages
+        run: ./scripts/build-deb.sh
+
+      - name: Install Debian package validator
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y lintian
+
       - name: Verify release checksums
         working-directory: dist
         run: sha256sum -c SHA256SUMS
+
+      - name: Validate Debian packages and clean-host lifecycle
+        run: ./scripts/test-deb-packages.sh --containers
 
       - name: Publish release
         shell: bash
@@ -201,6 +212,9 @@ jobs:
             "$RELEASE_TAG"
             dist/soju-tui-linux-amd64
             dist/soju-tui-linux-arm64
+            dist/soju-tui_*_amd64.deb
+            dist/soju-tui_*_arm64.deb
+            dist/THIRD_PARTY_LICENSES
             dist/SHA256SUMS
             dist/BUILDINFO
             --repo "$GITHUB_REPOSITORY"
@@ -224,5 +238,5 @@ jobs:
           {
             echo "## Published $RELEASE_TAG"
             echo
-            echo "The tag, Linux binaries, SHA256SUMS, and BUILDINFO were published by GitHub Actions."
+            echo "The tag, Linux binaries, AMD64/ARM64 Debian packages, dependency licenses, SHA256SUMS, and BUILDINFO were published by GitHub Actions."
           } >>"$GITHUB_STEP_SUMMARY"
