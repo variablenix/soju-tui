@@ -3,7 +3,7 @@ Upstream-Name: soju-tui
 Source: https://github.com/variablenix/soju-tui
 
 Files: *
-Copyright: soju-tui contributors
+Copyright: 2026 soju-tui contributors
 Comment:
  License and notice texts for modules compiled into the static executable are
  installed as /usr/share/doc/soju-tui/THIRD_PARTY_LICENSES.

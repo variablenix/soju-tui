@@ -1,0 +1,8 @@
+# soju-tui is intentionally distributed as a static Go executable so the raw
+# release and package contain the same architecture-specific artifact. Weekly
+# govulncheck and release gates require rebuilding for Go security updates.
+soju-tui: statically-linked-binary [usr/bin/soju-tui]
+
+# GitHub release packages are not uploads to the Debian archive and therefore
+# do not close a Debian initial-packaging bug.
+soju-tui: initial-upload-closes-no-bugs

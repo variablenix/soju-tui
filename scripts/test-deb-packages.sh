@@ -108,6 +108,7 @@ validate_package() {
 	[ -f "$EXTRACT_ROOT/usr/share/doc/soju-tui/BUILDINFO" ] || fail "$PACKAGE_PATH is missing build metadata"
 	cmp -s "$DIST_DIR/BUILDINFO" "$EXTRACT_ROOT/usr/share/doc/soju-tui/BUILDINFO" || fail "$PACKAGE_PATH contains different build metadata"
 	[ -f "$EXTRACT_ROOT/usr/share/doc/soju-tui/THIRD_PARTY_LICENSES" ] || fail "$PACKAGE_PATH is missing dependency license notices"
+	[ -f "$EXTRACT_ROOT/usr/share/lintian/overrides/soju-tui" ] || fail "$PACKAGE_PATH is missing documented Lintian overrides"
 	[ -f "$EXTRACT_ROOT/usr/share/man/man1/soju-tui.1.gz" ] || fail "$PACKAGE_PATH is missing the soju-tui man page"
 	[ -f "$EXTRACT_ROOT/usr/share/man/man8/soju-tui-setup.8.gz" ] || fail "$PACKAGE_PATH is missing the setup man page"
 	gzip -t "$EXTRACT_ROOT/usr/share/man/man1/soju-tui.1.gz"
@@ -145,7 +146,7 @@ validate_package amd64 amd64 soju-tui-linux-amd64
 validate_package arm64 arm64 soju-tui-linux-arm64
 
 if command -v lintian >/dev/null 2>&1; then
-	lintian --fail-on error "$AMD64_PACKAGE" "$ARM64_PACKAGE"
+	lintian --fail-on error,warning "$AMD64_PACKAGE" "$ARM64_PACKAGE"
 fi
 
 if [ "$RUN_CONTAINERS" -eq 0 ]; then

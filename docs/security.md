@@ -55,6 +55,9 @@ package receives the same metadata and content validation when lifecycle
 containers execute on the AMD64 GitHub host. Dependency license notices are
 generated from the module metadata embedded in both binaries, and generation
 fails if their dependency versions differ or a module lacks a license file.
+The package documents its intentional static-Go Lintian exception; weekly
+vulnerability scans and release gates require rebuilding when the Go standard
+library or a linked module needs a security update.
 
 ## Command execution
 

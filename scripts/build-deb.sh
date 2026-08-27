@@ -108,6 +108,7 @@ build_package() {
 		"$PACKAGE_ROOT/usr/sbin" \
 		"$PACKAGE_ROOT/usr/lib/soju-tui/scripts" \
 		"$PACKAGE_ROOT/usr/share/doc/soju-tui/docs" \
+		"$PACKAGE_ROOT/usr/share/lintian/overrides" \
 		"$PACKAGE_ROOT/usr/share/man/man1" \
 		"$PACKAGE_ROOT/usr/share/man/man8"
 	install_source_file "$SOURCE_BINARY" 0755 "$PACKAGE_ROOT/usr/bin/soju-tui"
@@ -120,6 +121,7 @@ build_package() {
 	install_source_file "$DIST_DIR/THIRD_PARTY_LICENSES" 0644 "$PACKAGE_ROOT/usr/share/doc/soju-tui/THIRD_PARTY_LICENSES"
 	install_source_file "$ROOT_DIR/packaging/debian/README.Debian" 0644 "$PACKAGE_ROOT/usr/share/doc/soju-tui/README.Debian"
 	install_source_file "$ROOT_DIR/packaging/debian/copyright" 0644 "$PACKAGE_ROOT/usr/share/doc/soju-tui/copyright"
+	install_source_file "$ROOT_DIR/packaging/debian/lintian-overrides" 0644 "$PACKAGE_ROOT/usr/share/lintian/overrides/soju-tui"
 	for DOCUMENT in "$ROOT_DIR"/docs/*.md; do
 		install_source_file "$DOCUMENT" 0644 "$PACKAGE_ROOT/usr/share/doc/soju-tui/docs/${DOCUMENT##*/}"
 	done
@@ -133,7 +135,8 @@ build_package() {
 	gzip -9n -c "$ROOT_DIR/packaging/debian/soju-tui-setup.8" >"$PACKAGE_ROOT/usr/share/man/man8/soju-tui-setup.8.gz"
 	{
 		printf 'soju-tui (%s) stable; urgency=medium\n\n' "$DEBIAN_VERSION"
-		printf '  * Package upstream soju-tui release %s (%s).\n\n' "$VERSION" "$REVISION"
+		printf '  * Package upstream release %s.\n' "$VERSION"
+		printf '  * Source revision: %s.\n\n' "$REVISION"
 		printf ' -- VariableNix <variablenix@users.noreply.github.com>  %s\n' "$CHANGELOG_DATE"
 	} | gzip -9n >"$PACKAGE_ROOT/usr/share/doc/soju-tui/changelog.Debian.gz"
 
