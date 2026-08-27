@@ -89,6 +89,26 @@ Read-only operations run immediately. Mutations first show the exact redacted
 argument preview. Ordinary changes require `y`; destructive or high-risk
 changes require the displayed phrase exactly.
 
+### Runtime ages in status output
+
+On Linux/systemd installations, **Server status** appends the current Soju
+process age and UTC start time obtained from the configured service unit. A
+user's **Network status** appends the age and UTC timestamp of the latest
+matching `connection registered` event retained by that unit's journal:
+
+```text
+2/2 users, 6 downstreams, 6 upstreams, 6 networks, 39 channels; uptime 31d 4h (since 2026-07-25T05:41:02Z)
+AlienIRCd (ircs://irc.example.net:6697) [connected]: 2 channels; connected for 31d 4h (since 2026-07-25T05:41:02Z)
+```
+
+The query is read-only and bounded. It is restricted to the current service
+start so a stale event from an earlier Soju process cannot be presented as the
+current connection. Disconnected or disabled networks never receive a
+connection age. Missing commands, insufficient journal access, rotated events,
+clock inconsistencies, and unsupported platforms all fail closed: the TUI
+shows the unmodified `sojuctl` line and never substitutes a first-observed or
+estimated timestamp.
+
 ## Password changes
 
 **Change my password** replaces the bouncer-login password for one discovered

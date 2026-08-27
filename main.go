@@ -29,6 +29,7 @@ func main() {
 	sojuctlFlag := flag.String("sojuctl", os.Getenv("SOJUCTL"), "path to sojuctl")
 	profileFlag := flag.String("profile", os.Getenv("SOJU_TUI_PROFILE"), "saved local admin profile path")
 	timeoutFlag := flag.Duration("timeout", 30*time.Second, "maximum duration for each sojuctl operation")
+	runtimeUnitFlag := flag.String("soju-systemd-unit", envOrDefault("SOJU_SYSTEMD_UNIT", defaultSojuSystemdUnit), "Soju systemd unit for optional uptime/connection-age reporting; empty disables")
 	setupFlag := flag.Bool("setup", false, "recreate the local admin profile")
 	acceptConfigFlag := flag.Bool("accept-config", false, "accept discovered first-run settings without prompting")
 	versionFlag := flag.Bool("version", false, "print the version and exit")
@@ -85,11 +86,22 @@ func main() {
 	}
 
 	backend := &SojuCtl{Path: sojuctlPath, Config: configPath, Timeout: *timeoutFlag}
-	app := newAdminApp(backend)
+	runtimeStatus, err := discoverRuntimeStatusSource(*runtimeUnitFlag, *timeoutFlag)
+	if err != nil {
+		fatal(err)
+	}
+	app := newAdminApp(backend, runtimeStatus)
 	if err := runUI(app); err != nil {
 		app.close()
 		fatal(err)
 	}
+}
+
+func envOrDefault(name, fallback string) string {
+	if value, ok := os.LookupEnv(name); ok {
+		return value
+	}
+	return fallback
 }
 
 func regularFileExists(path string) (bool, error) {

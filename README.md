@@ -16,6 +16,9 @@ it is not an IRC chat client and never opens channels or displays messages.
   saved targets; manual entry remains available for unusually large listings.
 - Inspect upstream CertFP fingerprints for one network or every saved network
   in a grouped, colorized view.
+- On Linux/systemd hosts, augment server and connected-network status with
+  exact RFC 3339 start times and compact elapsed ages when the corresponding
+  Soju service and journal evidence are readable.
 - Show only commands supported by the running Soju version.
 - Verify release artifacts with SHA-256, embed the exact Git revision, and test
   the command contract against real Soju v0.9.0 and v0.10.1 instances in CI.
@@ -79,6 +82,14 @@ setup to persist the admin-socket ACL after Soju recreates the socket. The
 prebuilt Linux executables work on AMD64 and ARM64 Linux environments with a
 compatible terminal. Other Unix-like systems can build the host target and
 configure admin-socket permissions with their native service manager.
+
+On Linux, the TUI also uses read-only `systemctl` and `journalctl` queries to
+enrich status output when the configured Soju unit is available. This is an
+optional inspection feature, not a service requirement: when either command or
+the retained journal event is unavailable, the original `sojuctl` status is
+shown unchanged. The default unit is `soju.service`; override it with
+`-soju-systemd-unit UNIT` or `SOJU_SYSTEMD_UNIT`, or pass an empty value to
+disable enrichment.
 
 ## Documentation
 

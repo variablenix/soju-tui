@@ -14,6 +14,11 @@ sojuctl -config /etc/soju/config user status USER
 sojuctl -config /etc/soju/config user run USER network status
 ```
 
+On Linux/systemd hosts, Soju-TUI may append process and upstream connection
+ages to the first and fourth outputs. These additions come from read-only
+service/journal evidence and are display-only; the underlying `sojuctl`
+commands and their compatibility contract are unchanged.
+
 ## Users
 
 Soju uses the same administrative command to change the selected account's own

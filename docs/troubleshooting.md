@@ -1,5 +1,25 @@
 # Troubleshooting
 
+## Server or network age is not shown
+
+Timing is optional and appears only when Soju runs as the configured systemd
+unit and the current account can read the required evidence. Check the same
+sources without elevation:
+
+```sh
+systemctl show -p ActiveState -p ExecMainStartTimestamp soju.service
+journalctl -u soju.service --grep='connection registered with nick' -n 1 --no-pager
+```
+
+If Soju uses another unit, start the TUI with
+`-soju-systemd-unit NAME.service` or set `SOJU_SYSTEMD_UNIT`. A network event
+may also have rotated out of the journal. In every failure case, the TUI keeps
+the underlying `sojuctl` output rather than displaying an inaccurate age.
+
+The TUI intentionally does not invoke `sudo` and setup does not grant broader
+journal-reader membership. Review the host-wide visibility implications before
+changing journal permissions. Passing an empty unit value disables the probes.
+
 ## Admin socket permission denied
 
 Verify the failure outside the TUI:
