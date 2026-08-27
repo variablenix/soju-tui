@@ -186,6 +186,7 @@ func sojuTUIHelp() []string {
 		"",
 		"SERVER OPERATIONS",
 		"  View server status, broadcast notices, toggle debug logging, or query the server-provided BouncerServ command help.",
+		"  On Linux/systemd hosts, readable service and journal timestamps add exact server uptime and connected-network ages; unavailable evidence is never estimated.",
 		"",
 		"SAFETY",
 		"  Read-only actions run directly. Every mutation requires confirmation; destructive or high-risk actions require an exact phrase.",

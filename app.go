@@ -107,6 +107,7 @@ type App struct {
 	ctx      context.Context
 	cancel   context.CancelFunc
 	backend  *SojuCtl
+	runtime  RuntimeStatusSource
 	admin    AdminState
 	results  chan adminResult
 	done     chan struct{}
@@ -120,12 +121,13 @@ type App struct {
 	localUsername string
 }
 
-func newAdminApp(backend *SojuCtl) *App {
+func newAdminApp(backend *SojuCtl, runtime RuntimeStatusSource) *App {
 	ctx, cancel := context.WithCancel(context.Background())
 	a := &App{
 		ctx:           ctx,
 		cancel:        cancel,
 		backend:       backend,
+		runtime:       runtime,
 		admin:         AdminState{View: adminOutput},
 		results:       make(chan adminResult, 16),
 		done:          make(chan struct{}),
@@ -179,6 +181,9 @@ func (a *App) requestOperation(op AdminOperation) {
 
 	go func() {
 		output, err := a.backend.Run(a.ctx, op.Args)
+		if err == nil && a.runtime != nil {
+			output = enrichRuntimeStatus(a.ctx, a.runtime, op.Args, output, time.Now())
+		}
 		select {
 		case a.results <- adminResult{Operation: op, Output: output, Err: err}:
 		case <-a.done:

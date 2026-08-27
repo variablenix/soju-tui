@@ -7,9 +7,10 @@ import (
 )
 
 type NetworkStatus struct {
-	Name     string
-	Address  string
-	Disabled bool
+	Name      string
+	Address   string
+	Disabled  bool
+	Connected bool
 }
 
 func (n NetworkStatus) Target() string {
@@ -30,20 +31,32 @@ func parseNetworkStatuses(output string) []NetworkStatus {
 		line := strings.TrimSpace(raw)
 		if match := namedNetworkStatus.FindStringSubmatch(line); len(match) == 5 {
 			networks = append(networks, NetworkStatus{
-				Name:     strings.TrimSpace(match[1]),
-				Address:  strings.TrimSpace(match[2]),
-				Disabled: statusContains(match[3], "disabled"),
+				Name:      strings.TrimSpace(match[1]),
+				Address:   strings.TrimSpace(match[2]),
+				Disabled:  statusContains(match[3], "disabled"),
+				Connected: statusStartsWith(match[3], "connected"),
 			})
 			continue
 		}
 		if match := unnamedNetworkStatus.FindStringSubmatch(line); len(match) == 4 {
 			networks = append(networks, NetworkStatus{
-				Address:  strings.TrimSpace(match[1]),
-				Disabled: statusContains(match[2], "disabled"),
+				Address:   strings.TrimSpace(match[1]),
+				Disabled:  statusContains(match[2], "disabled"),
+				Connected: statusStartsWith(match[2], "connected"),
 			})
 		}
 	}
 	return networks
+}
+
+func statusStartsWith(statuses, want string) bool {
+	want = strings.ToLower(strings.TrimSpace(want))
+	for _, status := range strings.Split(statuses, ",") {
+		if strings.HasPrefix(strings.ToLower(strings.TrimSpace(status)), want) {
+			return true
+		}
+	}
+	return false
 }
 
 func statusContains(statuses, want string) bool {

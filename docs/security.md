@@ -44,6 +44,15 @@ Every operation uses an argument vector with `exec.CommandContext`. User input
 is not interpolated into shell syntax, and the program never invokes `sh -c`.
 Inputs containing NUL, carriage return, or newline are rejected.
 
+Optional Linux runtime-age enrichment invokes resolved `systemctl` and
+`journalctl` executables directly with argument vectors; it never invokes
+`sudo` or a shell. The service unit is restricted to systemd unit-name
+characters. User and network names are quoted as literal journal-search values,
+the journal query returns at most one record, command output is bounded, and
+all probes have a deadline. The journal search starts at the current service
+process timestamp so records from a previous process are rejected. Missing or
+ambiguous evidence produces no timing claim.
+
 Built-in Soju-TUI help is compiled static text. Documentation URLs are shown
 for copying only; the help action does not launch a browser, make a network
 request, invoke `sojuctl`, or execute a shell.
@@ -107,3 +116,7 @@ of guessing that no certificate exists.
 The TUI does not edit Soju's config, database, listeners, or service definition.
 The explicit system setup wizard is the only component that requests elevated
 access; normal TUI operation and `soju-tui -setup` never invoke `sudo`.
+
+Runtime-age inspection does not modify the Soju unit or journal permissions.
+Do not grant broad journal access solely for this cosmetic feature without
+reviewing the additional host logs that access would expose.

@@ -9,10 +9,10 @@ func TestParseNetworkStatuses(t *testing.T) {
 	if len(networks) != 2 {
 		t.Fatalf("got %d networks: %#v", len(networks), networks)
 	}
-	if networks[0].Name != "ouch" || networks[0].Address != "ircs://irc.ouch.chat:6697" || networks[0].Disabled {
+	if networks[0].Name != "ouch" || networks[0].Address != "ircs://irc.ouch.chat:6697" || networks[0].Disabled || !networks[0].Connected {
 		t.Fatalf("unexpected named network: %#v", networks[0])
 	}
-	if networks[1].Name != "" || !networks[1].Disabled {
+	if networks[1].Name != "" || !networks[1].Disabled || networks[1].Connected {
 		t.Fatalf("unexpected unnamed network: %#v", networks[1])
 	}
 }

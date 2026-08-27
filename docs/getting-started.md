@@ -17,6 +17,12 @@ terminal library and does not use ncurses.
 | HTTPS access and `curl` | Required for the default release install | Required only when downloading dependencies or releases |
 | systemd and ACL tools | Not required by the TUI | Used only by the guided Linux socket-access setup |
 
+On Linux hosts that run Soju under systemd, `systemctl` and readable Soju
+journal entries optionally add server uptime and per-network connection ages to
+status output. They are not required for administration. The TUI never invokes
+`sudo`; if the current account cannot read the relevant journal event, it leaves
+that network's original `sojuctl` status unchanged rather than guessing.
+
 The Linux AMD64 and ARM64 artifacts produced by release builds use
 `CGO_ENABLED=0` and are statically linked. Select the artifact matching the
 host architecture.
@@ -145,8 +151,14 @@ soju-tui -config /etc/soju/config
 soju-tui -sojuctl /usr/bin/sojuctl
 soju-tui -profile ~/.config/soju-tui/admin.json
 soju-tui -timeout 60s
+soju-tui -soju-systemd-unit soju.service
 soju-tui -setup
 ```
+
+The systemd unit defaults to `soju.service`. Set `SOJU_SYSTEMD_UNIT` or use the
+flag for a templated or renamed service. An explicitly empty value disables the
+optional runtime enrichment. This setting is not persisted in the local
+profile.
 
 ## Updating or rerunning setup
 
