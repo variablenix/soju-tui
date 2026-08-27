@@ -123,8 +123,12 @@ build_package() {
 	for DOCUMENT in "$ROOT_DIR"/docs/*.md; do
 		install_source_file "$DOCUMENT" 0644 "$PACKAGE_ROOT/usr/share/doc/soju-tui/docs/${DOCUMENT##*/}"
 	done
-	[ -f "$ROOT_DIR/packaging/debian/soju-tui.1" ] && [ ! -L "$ROOT_DIR/packaging/debian/soju-tui.1" ] || fail "invalid soju-tui man-page source"
-	[ -f "$ROOT_DIR/packaging/debian/soju-tui-setup.8" ] && [ ! -L "$ROOT_DIR/packaging/debian/soju-tui-setup.8" ] || fail "invalid setup man-page source"
+	if [ ! -f "$ROOT_DIR/packaging/debian/soju-tui.1" ] || [ -L "$ROOT_DIR/packaging/debian/soju-tui.1" ]; then
+		fail "invalid soju-tui man-page source"
+	fi
+	if [ ! -f "$ROOT_DIR/packaging/debian/soju-tui-setup.8" ] || [ -L "$ROOT_DIR/packaging/debian/soju-tui-setup.8" ]; then
+		fail "invalid setup man-page source"
+	fi
 	gzip -9n -c "$ROOT_DIR/packaging/debian/soju-tui.1" >"$PACKAGE_ROOT/usr/share/man/man1/soju-tui.1.gz"
 	gzip -9n -c "$ROOT_DIR/packaging/debian/soju-tui-setup.8" >"$PACKAGE_ROOT/usr/share/man/man8/soju-tui-setup.8.gz"
 	{
