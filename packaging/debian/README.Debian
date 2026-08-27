@@ -1,0 +1,20 @@
+soju-tui for Debian and Ubuntu
+================================
+
+The package installs the interactive command as /usr/bin/soju-tui. It does not
+start a daemon, change Soju, grant administrative access, or install a
+soju-tui systemd service.
+
+The administrator who should use the TUI must already be able to write Soju's
+administrative Unix socket. On a systemd host, explicitly run the packaged
+guided helper after installation:
+
+  sudo soju-tui-setup --user LOGIN
+
+The helper previews and confirms a narrowly scoped ACL for the selected local
+account, verifies sojuctl access, and installs a path unit that reapplies that
+ACL only when Soju recreates its administrative socket.
+
+A manually installed /usr/local/bin/soju-tui usually takes precedence over the
+packaged /usr/bin/soju-tui. Use `type -a soju-tui` to find every copy, and move
+or remove the manual copy before relying on package upgrades.

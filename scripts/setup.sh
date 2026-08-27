@@ -11,6 +11,7 @@ SOJUCTL_PATH=
 TUI_BINARY=
 INSTALL_PATH=/usr/local/bin/soju-tui
 INSTALL_BINARY=1
+CONFIGURE_ONLY=0
 DRY_RUN=0
 ASSUME_YES=0
 CHECKSUMS_PATH=
@@ -18,6 +19,8 @@ ALLOW_DEVELOPMENT_BUILD=0
 DEFAULT_BINARY=0
 RELEASE_VERSION=latest
 RELEASE_EXPLICIT=0
+BINARY_EXPLICIT=0
+INSTALL_PATH_EXPLICIT=0
 USE_RELEASE=1
 RELEASE_TEMP_DIR=
 RELEASE_ASSET=
@@ -60,7 +63,10 @@ Options:
   --install-path P  Command path (default: /usr/local/bin/soju-tui)
   --allow-development-build
                     Permit a dev/dirty/unknown build (not for production)
+  --configure-only  Configure administrator socket access without selecting,
+                    downloading, validating, or installing a TUI binary
   --no-install      Configure socket access without installing the command
+                    after validating the selected release or local binary
   --dry-run         Show detected settings and proposed changes only
   --yes             Accept package, replacement, and ACL confirmation prompts
   -h, --help        Show this help
@@ -130,6 +136,7 @@ while [ "$#" -gt 0 ]; do
 		[ "$#" -ge 2 ] || fail "--binary requires a value"
 		[ "$RELEASE_EXPLICIT" -eq 0 ] || fail "--binary cannot be combined with --release"
 		TUI_BINARY=$2
+		BINARY_EXPLICIT=1
 		USE_RELEASE=0
 		shift 2
 		;;
@@ -141,7 +148,13 @@ while [ "$#" -gt 0 ]; do
 	--install-path)
 		[ "$#" -ge 2 ] || fail "--install-path requires a value"
 		INSTALL_PATH=$2
+		INSTALL_PATH_EXPLICIT=1
 		shift 2
+		;;
+	--configure-only)
+		CONFIGURE_ONLY=1
+		INSTALL_BINARY=0
+		shift
 		;;
 	--no-install)
 		INSTALL_BINARY=0
@@ -168,6 +181,15 @@ while [ "$#" -gt 0 ]; do
 		;;
 	esac
 done
+
+if [ "$CONFIGURE_ONLY" -eq 1 ]; then
+	[ "$RELEASE_EXPLICIT" -eq 0 ] || fail "--configure-only cannot be combined with --release"
+	[ "$BINARY_EXPLICIT" -eq 0 ] || fail "--configure-only cannot be combined with --binary"
+	[ -z "$CHECKSUMS_PATH" ] || fail "--configure-only cannot be combined with --checksums"
+	[ "$INSTALL_PATH_EXPLICIT" -eq 0 ] || fail "--configure-only cannot be combined with --install-path"
+	[ "$ALLOW_DEVELOPMENT_BUILD" -eq 0 ] || fail "--configure-only cannot be combined with --allow-development-build"
+	USE_RELEASE=0
+fi
 
 [ -n "$TARGET_USER" ] || fail "cannot determine the invoking login; use --user USER"
 case "$TARGET_USER" in
@@ -211,7 +233,9 @@ case "$SOJUCTL_PATH" in
 esac
 [ -x "$SOJUCTL_PATH" ] || fail "$SOJUCTL_PATH is not executable"
 [ -x "$GRANT_SCRIPT" ] || fail "$GRANT_SCRIPT is missing or not executable"
+command -v runuser >/dev/null 2>&1 || fail "runuser is required"
 
+if [ "$CONFIGURE_ONLY" -eq 0 ]; then
 case "$RELEASE_VERSION" in
 latest) ;;
 *[!A-Za-z0-9._+-]*) fail "release version contains unsupported characters" ;;
@@ -272,7 +296,6 @@ esac
 [ -f "$TUI_BINARY" ] || fail "$TUI_BINARY is missing; build or download the matching binary first"
 [ ! -L "$TUI_BINARY" ] || fail "refusing a symbolic-link source binary"
 [ -x "$TUI_BINARY" ] || fail "$TUI_BINARY is not executable"
-command -v runuser >/dev/null 2>&1 || fail "runuser is required"
 if command -v sha256sum >/dev/null 2>&1; then
 	SHA256_COMMAND=sha256sum
 elif command -v shasum >/dev/null 2>&1; then
@@ -329,6 +352,7 @@ if [ -n "$CHECKSUMS_PATH" ]; then
 	EXPECTED_SHA256=$(awk -v name="${TUI_BINARY##*/}" '$2 == name { print $1; found++ } END { if (found != 1) exit 1 }' "$CHECKSUMS_PATH") || fail "$CHECKSUMS_PATH must contain exactly one entry for ${TUI_BINARY##*/}"
 	[ "$EXPECTED_SHA256" = "$SOURCE_SHA256" ] || fail "$TUI_BINARY does not match $CHECKSUMS_PATH"
 fi
+fi
 
 INSTALL_STATUS=disabled
 if [ "$INSTALL_BINARY" -eq 1 ]; then
@@ -383,16 +407,21 @@ printf '  Local administrator: %s\n' "$TARGET_USER"
 printf '  Soju config:         %s\n' "$CONFIG_PATH"
 printf '  Admin socket:        %s\n' "$SOCKET_PATH"
 printf '  sojuctl:             %s\n' "$SOJUCTL_PATH"
-printf '  TUI binary:          %s\n' "$TUI_BINARY"
-printf '  TUI build:           %s\n' "$SOURCE_VERSION"
-printf '  TUI SHA-256:         %s\n' "$SOURCE_SHA256"
-if [ "$USE_RELEASE" -eq 1 ]; then
-	printf '  Release source:      GitHub %s\n' "$RELEASE_VERSION"
-fi
-printf '  Checksums manifest:  %s\n' "${CHECKSUMS_PATH:-not supplied (custom build)}"
-if [ "$INSTALL_BINARY" -eq 1 ]; then
-	printf '  Installed command:   %s (%s)\n\n' "$INSTALL_PATH" "$INSTALL_STATUS"
+if [ "$CONFIGURE_ONLY" -eq 1 ]; then
+	printf '  TUI binary:          managed separately (--configure-only)\n'
+	printf '  Installed command:   unchanged\n\n'
 else
+	printf '  TUI binary:          %s\n' "$TUI_BINARY"
+	printf '  TUI build:           %s\n' "$SOURCE_VERSION"
+	printf '  TUI SHA-256:         %s\n' "$SOURCE_SHA256"
+	if [ "$USE_RELEASE" -eq 1 ]; then
+		printf '  Release source:      GitHub %s\n' "$RELEASE_VERSION"
+	fi
+	printf '  Checksums manifest:  %s\n' "${CHECKSUMS_PATH:-not supplied (custom build)}"
+fi
+if [ "$CONFIGURE_ONLY" -eq 0 ] && [ "$INSTALL_BINARY" -eq 1 ]; then
+	printf '  Installed command:   %s (%s)\n\n' "$INSTALL_PATH" "$INSTALL_STATUS"
+elif [ "$CONFIGURE_ONLY" -eq 0 ]; then
 	printf '  Installed command:   disabled (--no-install)\n\n'
 fi
 
@@ -491,7 +520,9 @@ install_tui_binary
 printf '\nVerifying sojuctl as local user %s...\n' "$TARGET_USER"
 runuser -u "$TARGET_USER" -- "$SOJUCTL_PATH" -config "$CONFIG_PATH" server status
 
-if [ "$INSTALL_BINARY" -eq 1 ]; then
+if [ "$CONFIGURE_ONLY" -eq 1 ]; then
+	printf '\nAdministrator access setup complete. Run as %s:\n  soju-tui\n' "$TARGET_USER"
+elif [ "$INSTALL_BINARY" -eq 1 ]; then
 	printf '\nVerifying installed command as local user %s...\n' "$TARGET_USER"
 	INSTALLED_VERSION=$(runuser -u "$TARGET_USER" -- "$INSTALL_PATH" -version)
 	[ "$INSTALLED_VERSION" = "$SOURCE_VERSION" ] || fail "installed command reports a different build than $TUI_BINARY"

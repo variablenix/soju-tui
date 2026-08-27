@@ -30,8 +30,9 @@ it is not an IRC chat client and never opens channels or displays messages.
   intercepting text entered in forms and confirmations.
 - Use a responsive Soju-TUI bottle wordmark without crowding command output.
 - Written in Go and distributed as self-contained Linux AMD64 and ARM64
-  executables. Running those executables requires neither the Go toolchain nor
-  ncurses; a running Soju instance and `sojuctl` are still required.
+  executables and Debian/Ubuntu packages. Running them requires neither the Go
+  toolchain nor ncurses; a running Soju instance and `sojuctl` are still
+  required.
 
 ![Soju-TUI administration interface](assets/screenshots/soju-tui-screen.png)
 
@@ -43,7 +44,23 @@ Soju must already be running with an administrative listener:
 listen unix+admin://
 ```
 
-Preview and run the guided setup from the repository:
+Debian and Ubuntu releases include architecture-specific packages. They install
+the interactive command at `/usr/bin/soju-tui` without changing Soju, ACLs, or
+systemd configuration. After installing the downloaded package, explicitly
+authorize the trusted local administrator when needed:
+
+```sh
+sudo apt install ./soju-tui_VERSION-1_amd64.deb
+sudo soju-tui-setup --user "$(id -un)"
+soju-tui
+```
+
+Use the `arm64` package on AArch64. See
+[Debian and Ubuntu packages](docs/debian-packages.md) for checksum verification,
+upgrades, removal, and migration from `/usr/local/bin`.
+
+For a manual installation at `/usr/local/bin` or another
+administrator-selected path, preview and run the guided repository setup:
 
 ```sh
 ./scripts/setup.sh --dry-run
@@ -64,7 +81,8 @@ build instead of a GitHub release, pass it explicitly with `--binary` and, when
 available, its `SHA256SUMS` file. This keeps normal deployments independent of
 the repository's checked-in `dist/` files.
 
-The wizard installs the verified release binary as `/usr/local/bin/soju-tui`.
+The manual-install wizard installs the verified release binary as
+`/usr/local/bin/soju-tui`.
 Run it as the regular local user authorized by the wizard:
 
 ```sh
@@ -105,6 +123,8 @@ disable enrichment.
   CertFP preflight, and downstream device certificates
 - [Building and releases](docs/building.md) — helper script, targets, versions,
   and verification
+- [Debian and Ubuntu packages](docs/debian-packages.md) — package installation,
+  explicit access setup, upgrades, removal, and path precedence
 - [GitHub repository and checks](docs/github-mirror.md) — GitHub Actions,
   automated releases, downstream mirroring, and the `main` ruleset
 - [Security model](docs/security.md) — socket access, confirmations, secrets,

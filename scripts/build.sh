@@ -170,6 +170,10 @@ sh -n scripts/grant-admin-access.sh
 sh -n scripts/setup.sh
 sh -n scripts/test-soju-compat.sh
 sh -n scripts/check-coverage.sh
+sh -n scripts/build-deb.sh
+sh -n scripts/test-deb-packages.sh
+sh -n packaging/debian/soju-tui-setup
+sh -n scripts/generate-third-party-licenses.sh
 log "downloading Go modules"
 if ! go_cmd mod download; then
 	if [ "$GO_TOOLCHAIN" = local ]; then
@@ -179,6 +183,8 @@ if ! go_cmd mod download; then
 	fi
 	exit 1
 fi
+log "verifying Go modules"
+go_cmd mod verify
 log "running tests"
 go_cmd test ./...
 log "running go vet"
@@ -223,6 +229,23 @@ case "$TARGET" in
 		exit 2
 		;;
 esac
+
+case "$TARGET" in
+all)
+	./scripts/generate-third-party-licenses.sh "$ROOT_DIR/dist/THIRD_PARTY_LICENSES" \
+		"$ROOT_DIR/dist/soju-tui-linux-amd64" "$ROOT_DIR/dist/soju-tui-linux-arm64"
+	;;
+host)
+	./scripts/generate-third-party-licenses.sh "$ROOT_DIR/dist/THIRD_PARTY_LICENSES" "$ROOT_DIR/dist/soju-tui"
+	;;
+linux-amd64)
+	./scripts/generate-third-party-licenses.sh "$ROOT_DIR/dist/THIRD_PARTY_LICENSES" "$ROOT_DIR/dist/soju-tui-linux-amd64"
+	;;
+linux-arm64)
+	./scripts/generate-third-party-licenses.sh "$ROOT_DIR/dist/THIRD_PARTY_LICENSES" "$ROOT_DIR/dist/soju-tui-linux-arm64"
+	;;
+esac
+BUILT_ARTIFACTS="$BUILT_ARTIFACTS dist/THIRD_PARTY_LICENSES"
 
 sha256_file() {
 	if command -v sha256sum >/dev/null 2>&1; then

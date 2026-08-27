@@ -86,6 +86,25 @@ TARGET_USER=$(id -un)
 RELEASE_VERSION=${SOJU_TUI_TEST_RELEASE_VERSION:-0.3.2}
 SYSTEM_PATH=$TEST_BIN:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 
+if ! CONFIGURE_OUTPUT=$(sudo -n env PATH="$SYSTEM_PATH" "$TEST_SCRIPTS/setup.sh" \
+	--user "$TARGET_USER" \
+	--config "$CONFIG_PATH" \
+	--socket "$SOCKET_PATH" \
+	--sojuctl "$TEST_BIN/sojuctl" \
+	--configure-only \
+	--yes 2>&1); then
+	printf '%s\n' "$CONFIGURE_OUTPUT" >&2
+	fail "configure-only setup failed"
+fi
+printf '%s\n' "$CONFIGURE_OUTPUT"
+printf '%s\n' "$CONFIGURE_OUTPUT" | grep -F "TUI binary:          managed separately (--configure-only)" >/dev/null ||
+	fail "configure-only output did not describe package-managed behavior"
+printf '%s\n' "$CONFIGURE_OUTPUT" | grep -F "Administrator access setup complete." >/dev/null ||
+	fail "configure-only output did not report success"
+if printf '%s\n' "$CONFIGURE_OUTPUT" | grep -F "Downloading Soju-TUI release" >/dev/null; then
+	fail "configure-only setup unexpectedly downloaded a release"
+fi
+
 if ! OUTPUT=$(sudo -n env PATH="$SYSTEM_PATH" "$TEST_SCRIPTS/setup.sh" \
 	--user "$TARGET_USER" \
 	--config "$CONFIG_PATH" \

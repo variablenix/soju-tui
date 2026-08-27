@@ -24,6 +24,24 @@ Other targets:
 ./scripts/build.sh --target host
 ```
 
+After building both Linux targets, create native Debian packages from those
+same verified binaries and `BUILDINFO`:
+
+```sh
+./scripts/build.sh --target all --version 0.3.4
+./scripts/build-deb.sh
+./scripts/test-deb-packages.sh
+```
+
+The package builder produces `amd64` and `arm64` packages with Debian revision
+`-1`, adds them to `dist/SHA256SUMS`, normalizes timestamps from the source
+revision, and installs no maintainer script or systemd unit. CI adds
+`--containers` to exercise install, upgrade, and removal through APT in clean
+Debian and Ubuntu images. Package tests also rebuild both artifacts to prove
+reproducibility and run Lintian when it is available. Local package construction
+requires Linux with `dpkg-deb`, GNU core utilities, `file`, and `gzip`;
+container lifecycle testing also requires Docker.
+
 On a configured Linux host, install or update the short command after a
 successful build:
 
@@ -66,8 +84,9 @@ protected GitHub workflow:
 4. Run the workflow.
 
 The workflow validates the version and branch, repeats the test, security, and
-real-Soju compatibility gates, builds both static Linux targets, verifies the
-checksums, and creates the tag and GitHub release. The release is published by
+real-Soju compatibility gates, builds both static Linux targets and both Debian
+packages, verifies checksums and the clean-host package lifecycle, and creates
+the tag and GitHub release. The release is published by
 `github-actions[bot]`, not a personal account. It uses GitHub's temporary,
 repository-scoped token; no personal access token, repository secret, or GPG
 key is required.
@@ -92,11 +111,12 @@ not publish anything: a maintainer deliberately starts the Release workflow
 after all protected checks on `main` are green and no release-blocking issue is
 known.
 
-The release workflow publishes the four release files directly to GitHub. The
-normal setup wizard downloads and verifies those files, so a follow-up PR that
-copies release binaries into the repository's `dist/` directory is not part of
-the release process. The tracked `dist/` directory remains useful for local
-builds and explicit `--binary` installations.
+The release workflow publishes two raw binaries, two Debian packages,
+`THIRD_PARTY_LICENSES`, `SHA256SUMS`, and `BUILDINFO` directly to GitHub. The
+normal setup wizard downloads and verifies the raw executable files, so a
+follow-up PR that copies release binaries into the repository's `dist/`
+directory is not part of the release process. The tracked `dist/` directory
+remains useful for local builds and explicit `--binary` installations.
 
 ## Optional local release build
 
@@ -106,6 +126,7 @@ A local production build requires a clean working tree and an exact signed
 ```sh
 git tag -s v0.3.0 -m "soju-tui v0.3.0"
 ./scripts/build.sh --target all --version 0.3.0 --release
+./scripts/build-deb.sh
 ```
 
 This optional path requires a locally configured GPG key. The helper refuses
@@ -114,13 +135,15 @@ an unsigned, untagged, dirty, unknown, or development revision.
 `--github-actions-release` is accepted only in the manually dispatched GitHub
 release workflow and is not a general local bypass. `SHA256SUMS` protects
 artifact integrity, while `BUILDINFO` binds artifacts to their source revision
-and Go toolchain. Distribute all four release files together.
+and Go toolchain. Distribute the binaries, packages, checksum manifest, and
+build metadata together.
 
 ## Make targets
 
 ```sh
 make linux-amd64
 make linux-arm64
+make debs
 make test
 make vet
 make release VERSION=0.3.0
@@ -132,9 +155,10 @@ make release VERSION=0.3.0
 go test ./...
 go test -race ./...
 go vet ./...
-sh -n scripts/build.sh scripts/grant-admin-access.sh scripts/setup.sh
+shellcheck scripts/*.sh packaging/debian/soju-tui-setup
 ./scripts/check-coverage.sh
 ./scripts/test-soju-compat.sh
+./scripts/test-deb-packages.sh
 ```
 
 The GitHub Actions workflows repeat unit, race, vet,

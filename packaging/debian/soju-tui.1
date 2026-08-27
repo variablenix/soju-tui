@@ -1,0 +1,56 @@
+.TH SOJU-TUI 1 "2026-08-27" "soju-tui" "User Commands"
+.SH NAME
+soju-tui \- terminal administration frontend for the soju IRC bouncer
+.SH SYNOPSIS
+.B soju-tui
+.RI [ options ]
+.SH DESCRIPTION
+.B soju-tui
+is an interactive, administration-only terminal frontend for soju. It invokes
+.B sojuctl
+through the configured administrative Unix socket and does not run as a daemon.
+.PP
+The local account running the command must already have access to Soju's
+administrative socket. Debian and Ubuntu package users can explicitly run
+.BR soju-tui-setup (8)
+as an administrator to configure that access on a systemd host.
+.SH OPTIONS
+.TP
+.BI \-config " path"
+Use the specified Soju configuration file.
+.TP
+.BI \-sojuctl " path"
+Use the specified sojuctl executable.
+.TP
+.BI \-profile " path"
+Use the specified local administrator profile.
+.TP
+.BI \-timeout " duration"
+Set the maximum duration of an individual sojuctl operation.
+.TP
+.BI \-soju-systemd-unit " unit"
+Select the optional Soju unit used for uptime and connection-age inspection.
+An empty value disables this enrichment.
+.TP
+.B \-setup
+Rediscover and recreate the local administrator profile. This does not grant
+socket access or install system files.
+.TP
+.B \-accept-config
+Accept discovered first-run settings without an interactive confirmation.
+.TP
+.B \-version
+Print the version and source revision, then exit.
+.SH FILES
+.TP
+.I /etc/soju/config
+Default Soju configuration file.
+.TP
+.I ~/.config/soju-tui/admin.json
+Default mode-0600 local profile containing non-secret paths.
+.SH SEE ALSO
+.BR sojuctl (1),
+.BR soju (1),
+.BR soju-tui-setup (8)
+.SH AUTHOR
+The soju-tui contributors.

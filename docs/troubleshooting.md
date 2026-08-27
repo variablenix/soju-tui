@@ -69,11 +69,13 @@ the server's operating system and CPU architecture.
 
 ## `soju-tui` command not found
 
-The guided setup normally installs `/usr/local/bin/soju-tui`. Verify the file
-and your command search path:
+The Debian package installs `/usr/bin/soju-tui`; the guided manual setup
+installs `/usr/local/bin/soju-tui` by default. Verify every copy and the command
+search path:
 
 ```sh
 ls -l /usr/local/bin/soju-tui
+ls -l /usr/bin/soju-tui
 type -a soju-tui
 /usr/local/bin/soju-tui -version
 dist/soju-tui-linux-amd64 -version
@@ -113,6 +115,24 @@ that command-resolution issue.
 
 If `/usr/local/bin` is not in the login shell's `PATH`, run the absolute path or
 choose a trusted directory already in `PATH` with `--install-path`.
+
+If both package and manual copies exist, `/usr/local/bin` normally wins. After
+verifying `/usr/bin/soju-tui -version`, move or remove the manual copy and run
+`hash -r`. Update package installations with a new `.deb`, not the repository
+setup wizard.
+
+## Debian package is installed but the admin socket is denied
+
+Package installation intentionally does not guess an administrator or change
+socket ACLs. Preview and invoke the packaged helper explicitly:
+
+```sh
+sudo soju-tui-setup --user "$(id -un)" --dry-run
+sudo soju-tui-setup --user "$(id -un)"
+```
+
+This requires systemd only for the persistent ACL watcher. It does not install
+or replace `/usr/bin/soju-tui`.
 
 ## A menu action is missing
 
