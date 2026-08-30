@@ -142,3 +142,14 @@ maintainer scripts never invoke the wizard.
 Runtime-age inspection does not modify the Soju unit or journal permissions.
 Do not grant broad journal access solely for this cosmetic feature without
 reviewing the additional host logs that access would expose.
+
+The optional Grafana dashboard reads metrics exported by Soju itself. It does
+not add an HTTP server, background process, credential, or network listener to
+soju-tui. Soju's `http+prometheus` listener is deliberately loopback-only and
+does not provide application-level authentication. Keep it on `localhost`.
+Metrics expose operational counts and, with PostgreSQL, can include upstream
+IRC hostnames when Soju's built-in privacy threshold is met; treat them as
+sensitive infrastructure data.
+When metrics must cross a host boundary, use a reviewed authenticated TLS proxy
+and network source policy, or a host-local Prometheus agent; never expose the
+raw exporter directly to an untrusted network.

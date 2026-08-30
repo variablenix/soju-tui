@@ -108,6 +108,7 @@ build_package() {
 		"$PACKAGE_ROOT/usr/sbin" \
 		"$PACKAGE_ROOT/usr/lib/soju-tui/scripts" \
 		"$PACKAGE_ROOT/usr/share/doc/soju-tui/docs" \
+		"$PACKAGE_ROOT/usr/share/doc/soju-tui/grafana" \
 		"$PACKAGE_ROOT/usr/share/lintian/overrides" \
 		"$PACKAGE_ROOT/usr/share/man/man1" \
 		"$PACKAGE_ROOT/usr/share/man/man8"
@@ -124,6 +125,12 @@ build_package() {
 	install_source_file "$ROOT_DIR/packaging/debian/lintian-overrides" 0644 "$PACKAGE_ROOT/usr/share/lintian/overrides/soju-tui"
 	for DOCUMENT in "$ROOT_DIR"/docs/*.md; do
 		install_source_file "$DOCUMENT" 0644 "$PACKAGE_ROOT/usr/share/doc/soju-tui/docs/${DOCUMENT##*/}"
+	done
+	for OBSERVABILITY_FILE in \
+		"$ROOT_DIR/grafana/README.md" \
+		"$ROOT_DIR/grafana/prometheus-scrape.yml.example" \
+		"$ROOT_DIR/grafana/soju-overview.json"; do
+		install_source_file "$OBSERVABILITY_FILE" 0644 "$PACKAGE_ROOT/usr/share/doc/soju-tui/grafana/${OBSERVABILITY_FILE##*/}"
 	done
 	if [ ! -f "$ROOT_DIR/packaging/debian/soju-tui.1" ] || [ -L "$ROOT_DIR/packaging/debian/soju-tui.1" ]; then
 		fail "invalid soju-tui man-page source"
