@@ -6,6 +6,10 @@ the standalone Linux executables. A package installs the interactive command at
 under `/usr/share/man`, and the optional guided access helper at
 `/usr/sbin/soju-tui-setup`.
 
+The optional Grafana dashboard, Prometheus scrape example, and observability
+guidance are installed under `/usr/share/doc/soju-tui/grafana`. They configure
+neither Soju nor Prometheus automatically.
+
 The package also includes license and notice texts for the exact Go modules
 embedded in the release binaries. The release workflow verifies that AMD64 and
 ARM64 carry the same dependency versions before generating that notice file.

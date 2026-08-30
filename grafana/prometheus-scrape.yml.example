@@ -1,0 +1,13 @@
+# Merge this job into the existing top-level scrape_configs list.
+# Soju itself exports these metrics; soju-tui does not need to be running.
+- job_name: 'soju'
+  scrape_interval: 30s
+  scrape_timeout: 10s
+  metrics_path: /metrics
+  static_configs:
+    - targets: ['127.0.0.1:8081']
+      labels:
+        role: 'irc-bouncer'
+        use: 'soju'
+        hostname: 'nexus-node'
+        environment: 'production'

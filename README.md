@@ -22,6 +22,8 @@ it is not an IRC chat client and never opens channels or displays messages.
 - Show only commands supported by the running Soju version.
 - Verify release artifacts with SHA-256, embed the exact Git revision, and test
   the command contract against real Soju v0.9.0 and v0.10.1 instances in CI.
+- Import the included Grafana dashboard to graph Soju's loopback-only
+  Prometheus exporter without turning the interactive TUI into a service.
 - Preview every mutation as a redacted `sojuctl` command in an effect-coded
   confirmation: green for additions, blue for changes, and red for destructive
   actions.
@@ -125,6 +127,8 @@ disable enrichment.
   and verification
 - [Debian and Ubuntu packages](docs/debian-packages.md) — package installation,
   explicit access setup, upgrades, removal, and path precedence
+- [Grafana and Prometheus](grafana/README.md) — Soju exporter configuration,
+  a production-safe scrape example, and the importable dashboard
 - [GitHub repository and checks](docs/github-mirror.md) — GitHub Actions,
   automated releases, downstream mirroring, and the `main` ruleset
 - [Security model](docs/security.md) — socket access, confirmations, secrets,
