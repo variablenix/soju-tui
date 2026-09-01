@@ -133,6 +133,8 @@ EOF
 	assert_contains "$output" "updated channel"
 	output=$("$release_dir/sojuctl" -config "$config" user run compat-admin channel delete '#compat/compat')
 	assert_contains "$output" "deleted channel"
+	output=$("$release_dir/sojuctl" -config "$config" user run compat-admin network update compat)
+	assert_contains "$output" "updated network"
 	output=$("$release_dir/sojuctl" -config "$config" user run compat-admin network update compat -name compat-renamed)
 	assert_contains "$output" "updated network"
 	output=$("$release_dir/sojuctl" -config "$config" user run compat-admin network delete compat-renamed)

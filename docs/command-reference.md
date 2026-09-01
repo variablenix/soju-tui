@@ -45,8 +45,17 @@ sojuctl -config /etc/soju/config user run USER network create \
 sojuctl -config /etc/soju/config user run USER network update example \
   -enabled false
 
+# Disconnect and reconnect without changing saved settings
+sojuctl -config /etc/soju/config user run USER network update example
+
 sojuctl -config /etc/soju/config user run USER network delete example
 ```
+
+The Soju-TUI **Reconnect upstream network** action discovers the user's saved
+networks and runs the no-options `network update NETWORK` form above. Soju
+disconnects and reconnects that upstream connection, applying newly generated
+CertFP certificates or changed SASL credentials without rewriting any network
+settings.
 
 Valid connection schemes are `ircs://`, `irc+insecure://`, and
 `irc+unix:///path` in the TUI. Soju v0.9.0 and v0.10.1 require the equivalent

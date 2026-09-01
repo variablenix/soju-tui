@@ -447,7 +447,7 @@ func TestParseSojuUsernames(t *testing.T) {
 func TestUserTargetFormsReceiveDiscoverableAndCustomSelector(t *testing.T) {
 	userTargetedKinds := []string{
 		"user-status-specific", "user-password-change", "user-password-reset", "user-update", "user-identity-update", "user-delete",
-		"network-create", "network-update", "network-delete", "network-status", "network-quote",
+		"network-create", "network-update", "network-reconnect", "network-delete", "network-status", "network-quote",
 		"channel-create", "channel-update", "channel-delete", "channel-status",
 		"cert-generate", "cert-fingerprint",
 		"sasl-status", "sasl-set-plain", "sasl-reset",
