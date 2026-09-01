@@ -36,7 +36,7 @@ it is not an IRC chat client and never opens channels or displays messages.
   toolchain nor ncurses; a running Soju instance and `sojuctl` are still
   required.
 
-![Soju-TUI administration interface](assets/screenshots/soju-tui-screen.png)
+![Soju-TUI v0.3.7 administration interface](assets/screenshots/soju-tui-screen.png)
 
 ## Quick start
 
