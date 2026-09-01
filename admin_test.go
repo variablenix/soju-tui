@@ -831,6 +831,32 @@ func TestNetworkUpdateRejectsNoChangesAndTargetChange(t *testing.T) {
 	}
 }
 
+func TestNetworkReconnectBuildsSafeUpdateOperation(t *testing.T) {
+	form, err := newAdminForm("network-reconnect")
+	if err != nil {
+		t.Fatal(err)
+	}
+	setAdminField(t, form, "User", "ak")
+	setAdminField(t, form, "Network", "oftc")
+	op, err := buildAdminOperation("/etc/soju/config", form)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []string{"user", "run", "ak", "network", "update", "oftc"}
+	if strings.Join(op.Args, "\x00") != strings.Join(want, "\x00") {
+		t.Fatalf("reconnect argv = %#v, want %#v", op.Args, want)
+	}
+	if !op.Mutating {
+		t.Fatal("reconnect must be treated as a mutating operation")
+	}
+	if op.ConfirmationImpact != adminConfirmationChange {
+		t.Fatalf("reconnect confirmation impact = %v, want change", op.ConfirmationImpact)
+	}
+	if strings.Contains(op.Preview, "sh -c") {
+		t.Fatal("reconnect operation must not invoke a shell")
+	}
+}
+
 func TestNonTextFormFieldIgnoresTyping(t *testing.T) {
 	app := newTestApp()
 	app.admin.Form = &AdminForm{Fields: []AdminField{{Kind: "readonly", Value: "alice"}}}

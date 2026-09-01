@@ -138,6 +138,7 @@ func adminMenuItems() []AdminMenuItem {
 		{Label: "Network status for user", Kind: "network-status", Command: "network status"},
 		{Label: "Create network for user", Kind: "network-create", Command: "network create"},
 		{Label: "Update network for user", Kind: "network-update", Command: "network update"},
+		{Label: "Reconnect upstream network", Kind: "network-reconnect", Command: "network update"},
 		{Label: "Delete network for user", Kind: "network-delete", Command: "network delete"},
 		{Label: "Send raw network command", Kind: "network-quote", Command: "network quote"},
 		{Label: "Channel status for user", Kind: "channel-status", Command: "channel status"},
@@ -178,7 +179,7 @@ func sojuTUIHelp() []string {
 		"  Password replacement is authorized by the Soju admin socket and does not require or verify the old password.",
 		"",
 		"NETWORKS & CHANNELS",
-		"  Discover and select each user's saved networks and channels before inspecting or changing them. Raw network commands are high-risk and redacted.",
+		"  Discover and select each user's saved networks and channels before inspecting or changing them. Reconnect upstream networks when new SASL or CertFP settings need to take effect. Raw network commands are high-risk and redacted.",
 		"",
 		"CERTIFICATES & SASL",
 		"  Inspect the Soju host TLS certificate; manage per-network upstream CertFP and SASL; manage client certificates when supported.",
@@ -443,7 +444,7 @@ func (a *App) adminHelpKeyLocked(key string, width, height int) {
 func adminFormRequiresExistingUser(kind string) bool {
 	switch kind {
 	case "user-status-specific", "user-password-change", "user-password-reset", "user-update", "user-identity-update", "user-delete",
-		"network-create", "network-update", "network-delete", "network-status", "network-quote",
+		"network-create", "network-update", "network-reconnect", "network-delete", "network-status", "network-quote",
 		"channel-create", "channel-update", "channel-delete", "channel-status",
 		"cert-generate", "cert-fingerprint",
 		"sasl-status", "sasl-set-plain", "sasl-reset",
@@ -557,7 +558,7 @@ func preferExactUser(users []string, preferred string) []string {
 
 func adminFormRequiresExistingNetwork(kind string) bool {
 	switch kind {
-	case "network-update", "network-delete", "network-quote",
+	case "network-update", "network-reconnect", "network-delete", "network-quote",
 		"channel-create", "channel-update", "channel-delete", "channel-status",
 		"cert-generate", "cert-fingerprint",
 		"sasl-status", "sasl-set-plain", "sasl-reset":
@@ -833,6 +834,8 @@ func newAdminForm(kind string) (*AdminForm, error) {
 			userTarget,
 			networkTarget,
 		}}, nil
+	case "network-reconnect":
+		return &AdminForm{Kind: kind, Title: "Reconnect upstream network", Fields: []AdminField{userTarget, networkTarget}}, nil
 	case "network-delete":
 		return &AdminForm{Kind: kind, Title: "Delete network for user", Fields: []AdminField{userTarget, networkTarget}}, nil
 	case "network-status":
@@ -1513,6 +1516,9 @@ func buildAdminOperation(config string, form *AdminForm) (AdminOperation, error)
 		}
 		secrets = append(secrets, values["Password"])
 		secrets = append(secrets, networkCommandSecrets...)
+		refresh = userRun(values["User"], "network", "status")
+	case "network-reconnect":
+		args = userRun(values["User"], "network", "update", values["Network"])
 		refresh = userRun(values["User"], "network", "status")
 	case "network-update-lookup":
 		mutating = false

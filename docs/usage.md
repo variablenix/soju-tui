@@ -139,6 +139,12 @@ listing truncated by Soju.
 **Update network for user** then fills the address, name, and enabled state
 exposed by Soju. Only changed values are submitted.
 
+**Reconnect upstream network** selects a saved network and runs Soju's
+`network update NETWORK` command without changing its settings. Soju
+disconnects and reconnects the upstream network, which applies newly generated
+CertFP certificates or changed SASL credentials. This is a mutating operation
+and requires the normal confirmation prompt.
+
 Soju does not return saved upstream passwords, nicknames, usernames, real
 names, CertFP values, or connect commands in network status. Those fields remain
 blank to preserve the existing value, and saved passwords are never displayed.
