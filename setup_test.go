@@ -21,6 +21,11 @@ func TestSetupWizardDryRunDiscoversUserAndSocket(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer os.RemoveAll(temporaryDir)
+	// macOS aliases /tmp; installation deliberately rejects symlink ancestors.
+	temporaryDir, err = filepath.EvalSymlinks(temporaryDir)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	socketPath := filepath.Join(temporaryDir, "admin.sock")
 	listener, err := net.Listen("unix", socketPath)
@@ -245,6 +250,29 @@ func TestSetupWizardDryRunDiscoversUserAndSocket(t *testing.T) {
 	output, err = command.CombinedOutput()
 	if err == nil || !strings.Contains(string(output), "refusing to replace a symbolic-link install path") {
 		t.Fatalf("setup did not reject a symlink install path: %v\n%s", err, output)
+	}
+
+	linkedParent := filepath.Join(temporaryDir, "linked-parent")
+	if err := os.Symlink(filepath.Dir(installPath), linkedParent); err != nil {
+		t.Fatal(err)
+	}
+	for _, tc := range []struct{ name, path, stat, want string }{
+		{"symlink ancestor", filepath.Join(linkedParent, "nested", "soju-tui"), "", "symbolic-link install directory"},
+		{"dot component", temporaryDir + "/installed/../installed/soju-tui", "", "dot components"},
+		{"unowned ancestor", installPath, fmt.Sprintf("if [ \"${2:-}\" = '%%u' ] && [ \"${3:-}\" = %q ]; then echo 1000; exit 0; fi\n", temporaryDir), "must be owned by root"},
+		{"writable ancestor", installPath, fmt.Sprintf("if [ \"${2:-}\" = '%%a' ] && [ \"${3:-}\" = %q ]; then echo 777; exit 0; fi\n", temporaryDir), "must not be group- or world-writable"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			writeExecutable(t, filepath.Join(stubDir, "stat"), "#!/bin/sh\n"+tc.stat+"case \"${2:-}\" in\n'%u') echo 0 ;;\n'%a') echo 755 ;;\n'%u:%g:%a:%h') echo 0:0:755:1 ;;\nesac\n")
+			command := exec.Command(setupPath, "--user", "testadmin", "--config", configPath,
+				"--sojuctl", filepath.Join(stubDir, "sojuctl"), "--binary", tuiBinary,
+				"--install-path", tc.path, "--dry-run")
+			command.Env = append(os.Environ(), "PATH="+stubDir+":"+os.Getenv("PATH"))
+			output, err := command.CombinedOutput()
+			if err == nil || !strings.Contains(string(output), tc.want) {
+				t.Fatalf("unsafe path accepted or wrong error: %v\n%s", err, output)
+			}
+		})
 	}
 }
 

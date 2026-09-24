@@ -13,7 +13,10 @@ makes the socket world-writable.
 The setup wizard installs a root-owned mode-`0755` copy in
 `/usr/local/bin/soju-tui`; it does not create a link into a user-writable Git
 checkout. It rejects symbolic links and install directories that are not
-root-owned or that are writable by a group or other users. A multiple-link file
+root-owned or that are writable by a group or other users, including every
+ancestor directory. Custom installation paths beneath home directories or
+world-writable temporary directories are therefore not accepted. Dot components
+and repeated separators are rejected before filesystem operations. A multiple-link file
 is never trusted as current. Updates use a temporary file in the destination
 directory followed by an atomic rename, and replacing an existing file requires
 confirmation.

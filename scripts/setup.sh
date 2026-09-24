@@ -366,6 +366,9 @@ if [ "$INSTALL_BINARY" -eq 1 ]; then
 	case "$INSTALL_PATH" in
 	*[!A-Za-z0-9._/-]*) fail "the install path contains unsupported characters" ;;
 	esac
+	case "$INSTALL_PATH/" in
+	*/../* | */./* | *//*) fail "the install path must not contain dot components or repeated separators" ;;
+	esac
 	[ "$TUI_BINARY" != "$INSTALL_PATH" ] || fail "the source and install paths must differ; use --no-install to run in place"
 	[ ! -L "$INSTALL_PATH" ] || fail "refusing to replace a symbolic-link install path"
 	if [ -e "$INSTALL_PATH" ] && [ ! -f "$INSTALL_PATH" ]; then
@@ -374,17 +377,26 @@ if [ "$INSTALL_BINARY" -eq 1 ]; then
 	INSTALL_DIR=${INSTALL_PATH%/*}
 	[ -n "$INSTALL_DIR" ] || INSTALL_DIR=/
 	validate_install_directory() {
-		[ -d "$INSTALL_DIR" ] || fail "$INSTALL_DIR is not a directory"
-		[ ! -L "$INSTALL_DIR" ] || fail "refusing a symbolic-link install directory: $INSTALL_DIR"
-		[ "$(stat -c '%u' "$INSTALL_DIR")" = 0 ] || fail "install directory must be owned by root: $INSTALL_DIR"
-		INSTALL_DIR_MODE=$(stat -c '%a' "$INSTALL_DIR")
-		case "$INSTALL_DIR_MODE" in
-		*[2367][0-7] | *[0-7][2367]) fail "install directory must not be group- or world-writable: $INSTALL_DIR" ;;
-		esac
+		# A protected leaf is not enough: an untrusted ancestor could be renamed
+		# or replaced between validation and installation. Check to the root,
+		# including existing ancestors when the destination is not yet created.
+		CHECK_INSTALL_DIR=$INSTALL_DIR
+		while :; do
+			[ ! -L "$CHECK_INSTALL_DIR" ] || fail "refusing a symbolic-link install directory: $CHECK_INSTALL_DIR"
+			if [ -e "$CHECK_INSTALL_DIR" ]; then
+				[ -d "$CHECK_INSTALL_DIR" ] || fail "$CHECK_INSTALL_DIR is not a directory"
+				[ "$(stat -c '%u' "$CHECK_INSTALL_DIR")" = 0 ] || fail "install directory must be owned by root: $CHECK_INSTALL_DIR"
+				INSTALL_DIR_MODE=$(stat -c '%a' "$CHECK_INSTALL_DIR")
+				case "$INSTALL_DIR_MODE" in
+				*[2367][0-7] | *[0-7][2367]) fail "install directory must not be group- or world-writable: $CHECK_INSTALL_DIR" ;;
+				esac
+			fi
+			[ "$CHECK_INSTALL_DIR" != / ] || break
+			CHECK_INSTALL_DIR=${CHECK_INSTALL_DIR%/*}
+			[ -n "$CHECK_INSTALL_DIR" ] || CHECK_INSTALL_DIR=/
+		done
 	}
-	if [ -e "$INSTALL_DIR" ]; then
-		validate_install_directory
-	fi
+	validate_install_directory
 	installed_binary_is_current() {
 		[ -f "$INSTALL_PATH" ] &&
 			[ ! -L "$INSTALL_PATH" ] &&
