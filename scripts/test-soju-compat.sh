@@ -13,6 +13,7 @@ Usage: scripts/test-soju-compat.sh [--source PATH] [--tags "v0.9.0 v0.10.1"]
 Builds each requested upstream Soju tag, starts an isolated temporary instance,
 and verifies the sojuctl command grammar and output contracts used by Soju-TUI.
 No host Soju config, database, socket, certificate, or service is touched.
+--source is read-only: release sources are exported into the temporary workspace.
 EOF
 }
 
@@ -43,6 +44,7 @@ trap cleanup EXIT HUP INT TERM
 
 command -v git >/dev/null 2>&1 || { echo "git is required" >&2; exit 1; }
 command -v go >/dev/null 2>&1 || { echo "Go is required" >&2; exit 1; }
+command -v tar >/dev/null 2>&1 || { echo "tar is required" >&2; exit 1; }
 WORK_DIR=$(mktemp -d "${TMPDIR:-/tmp}/soju-tui-compat.XXXXXX")
 
 if [ -z "$SOJU_SOURCE" ]; then
@@ -53,7 +55,7 @@ else
 	/*) ;;
 	*) SOJU_SOURCE=$(CDPATH='' cd -- "$SOJU_SOURCE" && pwd) ;;
 	esac
-	[ -d "$SOJU_SOURCE/.git" ] || { echo "$SOJU_SOURCE is not a Soju Git checkout" >&2; exit 1; }
+	git -C "$SOJU_SOURCE" rev-parse --git-dir >/dev/null 2>&1 || { echo "$SOJU_SOURCE is not a Soju Git checkout" >&2; exit 1; }
 fi
 
 assert_contains() {
@@ -72,14 +74,18 @@ for tag in $TAGS; do
 	printf '[compat] testing Soju %s\n' "$tag"
 	release_dir=$WORK_DIR/${tag#v}
 	mkdir -p "$release_dir"
-	git -C "$SOJU_SOURCE" checkout --quiet --detach "$tag"
-	actual_commit=$(git -C "$SOJU_SOURCE" rev-parse HEAD)
+	actual_commit=$(git -C "$SOJU_SOURCE" rev-parse "$tag^{commit}")
 	[ "$actual_commit" = "$expected_commit" ] || {
 		printf 'Soju %s resolved to unexpected commit %s (expected %s)\n' "$tag" "$actual_commit" "$expected_commit" >&2
 		exit 1
 	}
+	# Never switch branches or build inside an operator's source checkout.
+	# Export only the verified release commit, excluding uncommitted files.
+	git -C "$SOJU_SOURCE" archive --format=tar --output="$release_dir/source.tar" "$actual_commit"
+	mkdir "$release_dir/source"
+	tar -xf "$release_dir/source.tar" -C "$release_dir/source"
 	(
-		cd "$SOJU_SOURCE"
+		cd "$release_dir/source"
 		GOTOOLCHAIN=auto go build -trimpath -o "$release_dir/soju" ./cmd/soju
 		GOTOOLCHAIN=auto go build -trimpath -o "$release_dir/sojuctl" ./cmd/sojuctl
 	)

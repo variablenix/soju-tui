@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -9,6 +10,28 @@ import (
 	"strings"
 	"time"
 )
+
+const sojuCtlOutputLimit = 4 << 20
+
+// Stdout and stderr share this writer, so os/exec serializes its Write calls.
+// Cancel on overflow and reject the partial response instead of parsing it.
+type sojuCtlOutput struct {
+	buffer   bytes.Buffer
+	cancel   context.CancelFunc
+	exceeded bool
+}
+
+func (b *sojuCtlOutput) Write(p []byte) (int, error) {
+	n := len(p)
+	remaining := sojuCtlOutputLimit - b.buffer.Len()
+	if n > remaining {
+		p = p[:remaining]
+		b.exceeded = true
+		b.cancel()
+	}
+	_, _ = b.buffer.Write(p)
+	return n, nil
+}
 
 var adminSocketPermissionPattern = regexp.MustCompile(`(?m)dial unix ([^\r\n]+): connect: permission denied`)
 var clientCertificateDisabledPattern = regexp.MustCompile(`(?i)client (certificate|certification) authentication.*disabled`)
@@ -43,8 +66,17 @@ func (s *SojuCtl) Run(parent context.Context, args []string) (string, error) {
 	// #nosec G204 -- the executable is resolved from an explicit local setting,
 	// arguments are passed as an argv vector, and no command shell is invoked.
 	command := exec.CommandContext(ctx, s.Path, argv...)
-	output, err := command.CombinedOutput()
-	text := string(output)
+	// A descendant retaining the output pipes must not defeat cancellation or
+	// keep the TUI waiting after sojuctl itself has exited.
+	command.WaitDelay = time.Second
+	output := &sojuCtlOutput{cancel: cancel}
+	command.Stdout = output
+	command.Stderr = output
+	err := command.Run()
+	if output.exceeded {
+		return "", errors.New("sojuctl output exceeded the 4 MiB limit; response discarded")
+	}
+	text := output.buffer.String()
 	if errors.Is(ctx.Err(), context.DeadlineExceeded) {
 		return text, fmt.Errorf("sojuctl timed out after %s", timeout)
 	}

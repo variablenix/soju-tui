@@ -65,6 +65,13 @@ Every operation uses an argument vector with `exec.CommandContext`. User input
 is not interpolated into shell syntax, and the program never invokes `sh -c`.
 Inputs containing NUL, carriage return, or newline are rejected.
 
+Combined `sojuctl` output is limited to 4 MiB per invocation. Exceeding that
+limit cancels the command and discards the partial response so discovery cannot
+mistake truncated output for a complete result. Pipe draining is limited to one
+second after process exit or cancellation, including when a descendant keeps a
+pipe open. Cancellation does not roll back an already applied Soju operation;
+check its state before retrying a mutation.
+
 Optional Linux runtime-age enrichment invokes resolved `systemctl` and
 `journalctl` executables directly with argument vectors; it never invokes
 `sudo` or a shell. The service unit is restricted to systemd unit-name
