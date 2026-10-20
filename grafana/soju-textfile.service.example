@@ -1,0 +1,16 @@
+[Unit]
+Description=Collect read-only Soju aggregate statistics
+After=soju.service
+
+[Service]
+Type=oneshot
+# Set this to the native job="soju" target's exact instance label.
+ExecStart=/usr/bin/python3 /usr/local/libexec/soju-textfile.py --instance example-bouncer:18081 --output /var/lib/prometheus/soju-textfile/soju.prom
+TimeoutStartSec=25
+UMask=0022
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=yes
+ReadWritePaths=/var/lib/prometheus/soju-textfile
+RestrictAddressFamilies=AF_UNIX

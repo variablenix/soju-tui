@@ -5,3 +5,6 @@
 /dist/*
 !/dist/SHA256SUMS
 !/dist/BUILDINFO
+
+# Optional observability helper test cache.
+__pycache__/

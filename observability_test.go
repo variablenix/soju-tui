@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"regexp"
 	"strings"
 	"testing"
 )
@@ -85,8 +86,11 @@ func TestGrafanaDashboardContract(t *testing.T) {
 			if !ok || strings.TrimSpace(expr) == "" {
 				t.Fatalf("panel %d target %d has no PromQL expression", int(id), j)
 			}
-			if !strings.Contains(expr, `job=~"$job"`) || !strings.Contains(expr, `instance=~"$instance"`) {
-				t.Errorf("panel %d target %d does not honor both dashboard selectors: %s", int(id), j, expr)
+			if !strings.Contains(expr, `job="soju"`) || strings.Contains(expr, "$job") || !strings.Contains(expr, `instance=~"$instance"`) {
+				t.Errorf("panel %d target %d must scope the instance selector to the soju job: %s", int(id), j, expr)
+			}
+			if target["interval"] != "30s" {
+				t.Errorf("panel %d target %d must match the example's 30-second scrape interval", int(id), j)
 			}
 			queryCount++
 		}
@@ -111,6 +115,13 @@ func TestGrafanaDashboardContract(t *testing.T) {
 		"process_resident_memory_bytes",
 		"go_goroutines",
 		"go_memstats_heap_alloc_bytes",
+		"scrape_duration_seconds",
+		"scrape_samples_scraped",
+		"soju_admin_networks_configured",
+		"soju_admin_networks_disconnected",
+		"soju_admin_channels_joined",
+		"soju_admin_collected_timestamp_seconds",
+		"soju_admin_collection_success",
 	}
 	for _, metric := range requiredMetrics {
 		if !strings.Contains(encoded, metric) {
@@ -118,13 +129,28 @@ func TestGrafanaDashboardContract(t *testing.T) {
 		}
 	}
 
-	for _, requirement := range []string{"${DS_PROMETHEUS}", "$job", "$instance", "$__rate_interval", "$__range"} {
+	for _, requirement := range []string{"${DS_PROMETHEUS}", "$instance", "$__rate_interval", "$__range"} {
 		if !strings.Contains(encoded, requirement) {
 			t.Errorf("dashboard does not contain portable selector %q", requirement)
 		}
 	}
-	if strings.Contains(encoded, "10.69.0.22") || strings.Contains(encoded, "localhost:8081") {
+	if regexp.MustCompile(`\b(?:\d{1,3}\.){3}\d{1,3}\b`).MatchString(encoded) || strings.Contains(encoded, "localhost:") {
 		t.Error("dashboard JSON must not hard-code an operator host or exporter address")
+	}
+	if strings.Contains(encoded, "soju_networks_total") {
+		t.Error("the backend-independent dashboard must not require PostgreSQL-only network counts")
+	}
+	templating, ok := dashboard["templating"].(map[string]any)
+	if !ok {
+		t.Fatal("dashboard must define its instance selector")
+	}
+	variables, ok := templating["list"].([]any)
+	if !ok || len(variables) != 1 {
+		t.Fatal("dashboard must expose only its scoped instance selector")
+	}
+	instance, ok := variables[0].(map[string]any)
+	if !ok || instance["name"] != "instance" || instance["definition"] != `label_values(up{job="soju"}, instance)` {
+		t.Fatalf("instance selector must include failing Soju targets: %#v", variables[0])
 	}
 }
 
@@ -148,7 +174,7 @@ func TestPrometheusScrapeExampleContract(t *testing.T) {
 		"scrape_interval: 30s",
 		"scrape_timeout: 10s",
 		"metrics_path: /metrics",
-		"targets: ['127.0.0.1:8081']",
+		"targets: ['127.0.0.1:18080']",
 		"role: 'irc-bouncer'",
 		"use: 'soju'",
 		"environment: 'production'",
@@ -157,7 +183,7 @@ func TestPrometheusScrapeExampleContract(t *testing.T) {
 			t.Errorf("Prometheus example is missing %q", required)
 		}
 	}
-	for _, forbidden := range []string{"10.69.0.22", "0.0.0.0", "http+insecure"} {
+	for _, forbidden := range []string{"0.0.0.0", "http+insecure"} {
 		if strings.Contains(config, forbidden) {
 			t.Errorf("Prometheus example contains unsafe or operator-specific value %q", forbidden)
 		}
