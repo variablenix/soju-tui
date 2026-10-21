@@ -5,6 +5,8 @@ administered by soju-tui. The metrics come directly from the long-running Soju
 process. soju-tui remains an interactive command and does not need to stay open
 or expose a network service.
 
+![Soju Grafana dashboard showing network and channel totals, uptime, traffic, and reliability](../assets/screenshots/soju-grafana-dashboard.png)
+
 The dashboard is based on the metric names exported by Soju 0.10.1:
 
 - active users, upstreams, and downstreams;
