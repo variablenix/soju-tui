@@ -38,6 +38,13 @@ it is not an IRC chat client and never opens channels or displays messages.
 
 ![Soju-TUI v0.3.7 administration interface](assets/screenshots/soju-tui-screen.png)
 
+## Grafana dashboard
+
+Graph Soju networks, joined channels, uptime, traffic, and reliability with the
+[included dashboard and setup guide](grafana/README.md).
+
+![Soju Grafana dashboard showing network and channel totals, uptime, traffic, and reliability](assets/screenshots/soju-grafana-dashboard.png)
+
 ## Quick start
 
 Soju must already be running with an administrative listener:
