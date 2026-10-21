@@ -74,6 +74,9 @@ jobs:
       - name: Run tests with race detection
         run: go test -race -count=1 ./...
 
+      - name: Test optional read-only aggregate collector
+        run: python3 -m unittest discover -s grafana -p 'test_*.py' -v
+
       - name: Enforce coverage floor
         run: ./scripts/check-coverage.sh
 
