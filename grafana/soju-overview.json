@@ -87,10 +87,10 @@
         "overrides": []
       },
       "gridPos": {
-        "h": 4,
-        "w": 4,
         "x": 0,
-        "y": 0
+        "y": 0,
+        "w": 6,
+        "h": 4
       },
       "id": 1,
       "options": {
@@ -131,70 +131,6 @@
         "type": "prometheus",
         "uid": "${DS_PROMETHEUS}"
       },
-      "description": "Current active Soju users across the selected targets.",
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "thresholds"
-          },
-          "decimals": 0,
-          "noValue": "N/A",
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green"
-              }
-            ]
-          }
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 4,
-        "w": 4,
-        "x": 4,
-        "y": 0
-      },
-      "id": 2,
-      "options": {
-        "colorMode": "value",
-        "graphMode": "area",
-        "justifyMode": "auto",
-        "orientation": "auto",
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "",
-          "values": false
-        },
-        "textMode": "auto",
-        "wideLayout": true
-      },
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${DS_PROMETHEUS}"
-          },
-          "editorMode": "code",
-          "expr": "sum(soju_users_active{job=\"soju\", instance=~\"$instance\"})",
-          "instant": false,
-          "legendFormat": "Users",
-          "range": true,
-          "refId": "A",
-          "interval": "30s"
-        }
-      ],
-      "title": "Users",
-      "type": "stat"
-    },
-    {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${DS_PROMETHEUS}"
-      },
       "description": "Connected upstream connections across the selected Soju processes. Each user/network connection counts separately.",
       "fieldConfig": {
         "defaults": {
@@ -212,10 +148,10 @@
         "overrides": []
       },
       "gridPos": {
-        "h": 4,
-        "w": 4,
-        "x": 8,
-        "y": 0
+        "x": 6,
+        "y": 0,
+        "w": 6,
+        "h": 4
       },
       "id": 3,
       "options": {
@@ -254,65 +190,6 @@
         "type": "prometheus",
         "uid": "${DS_PROMETHEUS}"
       },
-      "description": "Current active IRC client connections to Soju.",
-      "fieldConfig": {
-        "defaults": {
-          "decimals": 0,
-          "noValue": "N/A",
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green"
-              }
-            ]
-          }
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 4,
-        "w": 4,
-        "x": 12,
-        "y": 0
-      },
-      "id": 4,
-      "options": {
-        "colorMode": "value",
-        "graphMode": "area",
-        "justifyMode": "auto",
-        "orientation": "auto",
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "",
-          "values": false
-        },
-        "textMode": "auto",
-        "wideLayout": true
-      },
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${DS_PROMETHEUS}"
-          },
-          "editorMode": "code",
-          "expr": "sum(soju_downstreams_active{job=\"soju\", instance=~\"$instance\"})",
-          "legendFormat": "Downstreams",
-          "refId": "A",
-          "interval": "30s"
-        }
-      ],
-      "title": "Clients",
-      "type": "stat"
-    },
-    {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${DS_PROMETHEUS}"
-      },
       "description": "Configured networks, including disabled networks. Available with SQLite or PostgreSQL through the optional admin collector. Optional read-only soju_admin collector required; failed, missing, or older-than-120-second collections show N/A. Counts are summed across selected instances and user/network configurations, not unique IRC networks or unique channel names.",
       "fieldConfig": {
         "defaults": {
@@ -331,10 +208,10 @@
         "overrides": []
       },
       "gridPos": {
-        "h": 4,
-        "w": 4,
-        "x": 16,
-        "y": 0
+        "x": 12,
+        "y": 0,
+        "w": 6,
+        "h": 4
       },
       "id": 5,
       "options": {
@@ -392,10 +269,10 @@
         "overrides": []
       },
       "gridPos": {
-        "h": 4,
-        "w": 4,
-        "x": 20,
-        "y": 0
+        "x": 18,
+        "y": 0,
+        "w": 6,
+        "h": 4
       },
       "id": 6,
       "options": {
@@ -436,6 +313,129 @@
         "type": "prometheus",
         "uid": "${DS_PROMETHEUS}"
       },
+      "description": "Current active Soju users across the selected targets.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "decimals": 0,
+          "noValue": "N/A",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green"
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 4,
+        "w": 6,
+        "h": 4
+      },
+      "id": 2,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto",
+        "wideLayout": true
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "editorMode": "code",
+          "expr": "sum(soju_users_active{job=\"soju\", instance=~\"$instance\"})",
+          "instant": false,
+          "legendFormat": "Users",
+          "range": true,
+          "refId": "A",
+          "interval": "30s"
+        }
+      ],
+      "title": "Users",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "description": "Current active IRC client connections to Soju.",
+      "fieldConfig": {
+        "defaults": {
+          "decimals": 0,
+          "noValue": "N/A",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green"
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "x": 6,
+        "y": 4,
+        "w": 6,
+        "h": 4
+      },
+      "id": 4,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto",
+        "wideLayout": true
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "editorMode": "code",
+          "expr": "sum(soju_downstreams_active{job=\"soju\", instance=~\"$instance\"})",
+          "legendFormat": "Downstreams",
+          "refId": "A",
+          "interval": "30s"
+        }
+      ],
+      "title": "Clients",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
       "description": "Channels currently joined on connected upstreams, reported by Soju's live network status. Detached downstream views still count if the bouncer remains joined. Optional read-only soju_admin collector required; failed, missing, or older-than-120-second collections show N/A. Counts are summed across selected instances and user/network configurations, not unique IRC networks or unique channel names.",
       "fieldConfig": {
         "defaults": {
@@ -455,7 +455,7 @@
         "overrides": []
       },
       "gridPos": {
-        "x": 0,
+        "x": 12,
         "y": 4,
         "w": 6,
         "h": 4
@@ -518,7 +518,7 @@
         "overrides": []
       },
       "gridPos": {
-        "x": 6,
+        "x": 18,
         "y": 4,
         "w": 6,
         "h": 4
@@ -581,9 +581,9 @@
         "overrides": []
       },
       "gridPos": {
-        "x": 12,
-        "y": 4,
-        "w": 6,
+        "x": 0,
+        "y": 8,
+        "w": 8,
         "h": 4
       },
       "id": 21,
@@ -648,9 +648,9 @@
         "overrides": []
       },
       "gridPos": {
-        "x": 18,
-        "y": 4,
-        "w": 6,
+        "x": 8,
+        "y": 8,
+        "w": 8,
         "h": 4
       },
       "id": 22,
@@ -685,6 +685,87 @@
         }
       ],
       "title": "Networks down",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "description": "Fresh means the optional read-only collector succeeded within 120 seconds and its private exporter is reachable. Stale or failed collections are excluded from network/channel cards. Missing collectors show N/A, not zero.",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "noValue": "N/A",
+          "mappings": [
+            {
+              "type": "value",
+              "options": {
+                "0": {
+                  "text": "STALE / FAILED",
+                  "color": "orange"
+                },
+                "1": {
+                  "text": "FRESH",
+                  "color": "green"
+                }
+              }
+            }
+          ],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "orange",
+                "value": null
+              },
+              {
+                "color": "green",
+                "value": 1
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "x": 16,
+        "y": 8,
+        "w": 8,
+        "h": 4
+      },
+      "id": 24,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto",
+        "wideLayout": true
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "expr": "min((soju_admin_collection_success{job=\"soju-admin\", soju_instance=~\"$instance\"} * on(job, instance, soju_instance) ((time() - soju_admin_collected_timestamp_seconds{job=\"soju-admin\", soju_instance=~\"$instance\"}) < bool 120) * on(job, instance) group_left up{job=\"soju-admin\"}) and on(soju_instance) label_replace(up{job=\"soju\", instance=~\"$instance\"}, \"soju_instance\", \"$1\", \"instance\", \"(.*)\"))",
+          "editorMode": "code",
+          "instant": true,
+          "range": false,
+          "refId": "A",
+          "interval": "30s",
+          "legendFormat": "Counts collector"
+        }
+      ],
+      "title": "Counts collector",
       "type": "stat"
     },
     {
@@ -737,7 +818,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 8
+        "y": 12
       },
       "id": 7,
       "options": {
@@ -845,7 +926,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 8
+        "y": 12
       },
       "id": 8,
       "options": {
@@ -942,7 +1023,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 16
+        "y": 20
       },
       "id": 9,
       "options": {
@@ -1051,7 +1132,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 16
+        "y": 20
       },
       "id": 10,
       "options": {
@@ -1128,7 +1209,7 @@
         "h": 6,
         "w": 6,
         "x": 0,
-        "y": 24
+        "y": 28
       },
       "id": 11,
       "options": {
@@ -1227,7 +1308,7 @@
         "h": 6,
         "w": 6,
         "x": 6,
-        "y": 24
+        "y": 28
       },
       "id": 12,
       "options": {
@@ -1312,7 +1393,7 @@
         "h": 6,
         "w": 6,
         "x": 12,
-        "y": 24
+        "y": 28
       },
       "id": 13,
       "options": {
@@ -1417,7 +1498,7 @@
         "h": 6,
         "w": 6,
         "x": 18,
-        "y": 24
+        "y": 28
       },
       "id": 14,
       "options": {
@@ -1514,7 +1595,7 @@
       },
       "gridPos": {
         "x": 0,
-        "y": 30,
+        "y": 34,
         "w": 12,
         "h": 7
       },
@@ -1601,7 +1682,7 @@
       },
       "gridPos": {
         "x": 12,
-        "y": 30,
+        "y": 34,
         "w": 12,
         "h": 7
       },
@@ -1666,7 +1747,7 @@
       },
       "gridPos": {
         "x": 0,
-        "y": 37,
+        "y": 41,
         "w": 12,
         "h": 4
       },
@@ -1733,7 +1814,7 @@
       },
       "gridPos": {
         "x": 12,
-        "y": 37,
+        "y": 41,
         "w": 12,
         "h": 4
       },
@@ -1791,8 +1872,8 @@
       },
       "gridPos": {
         "x": 0,
-        "y": 41,
-        "w": 12,
+        "y": 45,
+        "w": 24,
         "h": 7
       },
       "id": 23,
@@ -1828,87 +1909,6 @@
       ],
       "title": "Soju uptime by instance",
       "type": "timeseries"
-    },
-    {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${DS_PROMETHEUS}"
-      },
-      "description": "Fresh means the optional read-only collector succeeded within 120 seconds and its private exporter is reachable. Stale or failed collections are excluded from network/channel cards. Missing collectors show N/A, not zero.",
-      "fieldConfig": {
-        "defaults": {
-          "unit": "short",
-          "noValue": "N/A",
-          "mappings": [
-            {
-              "type": "value",
-              "options": {
-                "0": {
-                  "text": "STALE / FAILED",
-                  "color": "orange"
-                },
-                "1": {
-                  "text": "FRESH",
-                  "color": "green"
-                }
-              }
-            }
-          ],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "orange",
-                "value": null
-              },
-              {
-                "color": "green",
-                "value": 1
-              }
-            ]
-          }
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "x": 12,
-        "y": 41,
-        "w": 12,
-        "h": 7
-      },
-      "id": 24,
-      "options": {
-        "colorMode": "value",
-        "graphMode": "none",
-        "justifyMode": "auto",
-        "orientation": "auto",
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "",
-          "values": false
-        },
-        "textMode": "auto",
-        "wideLayout": true
-      },
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${DS_PROMETHEUS}"
-          },
-          "expr": "min((soju_admin_collection_success{job=\"soju-admin\", soju_instance=~\"$instance\"} * on(job, instance, soju_instance) ((time() - soju_admin_collected_timestamp_seconds{job=\"soju-admin\", soju_instance=~\"$instance\"}) < bool 120) * on(job, instance) group_left up{job=\"soju-admin\"}) and on(soju_instance) label_replace(up{job=\"soju\", instance=~\"$instance\"}, \"soju_instance\", \"$1\", \"instance\", \"(.*)\"))",
-          "editorMode": "code",
-          "instant": true,
-          "range": false,
-          "refId": "A",
-          "interval": "30s",
-          "legendFormat": "Counts collector"
-        }
-      ],
-      "title": "Counts collector",
-      "type": "stat"
     }
   ],
   "refresh": "30s",
