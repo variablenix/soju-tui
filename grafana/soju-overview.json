@@ -3,36 +3,10 @@
     {
       "name": "DS_PROMETHEUS",
       "label": "Prometheus",
-      "description": "Prometheus data source containing Soju metrics",
+      "description": "Prometheus with native soju and optional soju-admin jobs.",
       "type": "datasource",
       "pluginId": "prometheus",
       "pluginName": "Prometheus"
-    }
-  ],
-  "__requires": [
-    {
-      "type": "grafana",
-      "id": "grafana",
-      "name": "Grafana",
-      "version": "10.0.0"
-    },
-    {
-      "type": "datasource",
-      "id": "prometheus",
-      "name": "Prometheus",
-      "version": "1.0.0"
-    },
-    {
-      "type": "panel",
-      "id": "stat",
-      "name": "Stat",
-      "version": ""
-    },
-    {
-      "type": "panel",
-      "id": "timeseries",
-      "name": "Time series",
-      "version": ""
     }
   ],
   "annotations": {
@@ -51,11 +25,10 @@
       }
     ]
   },
-  "description": "Operational overview for the Prometheus metrics exported by the Soju IRC bouncer. Distributed with soju-tui.",
+  "description": "Operational overview of Soju IRC bouncer metrics. Scrape status measures Prometheus access to the exporter; upstream failures are tracked separately. Based on the dashboard distributed with soju-tui.",
   "editable": true,
   "fiscalYearStartMonth": 0,
   "graphTooltip": 1,
-  "id": null,
   "links": [
     {
       "asDropdown": false,
@@ -77,7 +50,7 @@
         "type": "prometheus",
         "uid": "${DS_PROMETHEUS}"
       },
-      "description": "Prometheus can currently scrape every selected Soju target.",
+      "description": "Prometheus can scrape every selected Soju target. This does not assert that every upstream IRC network is connected.",
       "fieldConfig": {
         "defaults": {
           "mappings": [
@@ -102,8 +75,7 @@
             "mode": "absolute",
             "steps": [
               {
-                "color": "red",
-                "value": null
+                "color": "red"
               },
               {
                 "color": "green",
@@ -115,10 +87,10 @@
         "overrides": []
       },
       "gridPos": {
-        "h": 4,
-        "w": 4,
         "x": 0,
-        "y": 0
+        "y": 0,
+        "w": 6,
+        "h": 4
       },
       "id": 1,
       "options": {
@@ -136,7 +108,6 @@
         "textMode": "auto",
         "wideLayout": true
       },
-      "pluginVersion": "10.0.0",
       "targets": [
         {
           "datasource": {
@@ -144,14 +115,197 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "editorMode": "code",
-          "expr": "min(up{job=~\"$job\", instance=~\"$instance\"})",
+          "expr": "min(up{job=\"soju\", instance=~\"$instance\"})",
           "instant": true,
           "legendFormat": "Soju",
           "range": false,
-          "refId": "A"
+          "refId": "A",
+          "interval": "30s"
         }
       ],
-      "title": "Exporter status",
+      "title": "Scrape status",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "description": "Connected upstream connections across the selected Soju processes. Each user/network connection counts separately.",
+      "fieldConfig": {
+        "defaults": {
+          "decimals": 0,
+          "noValue": "N/A",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green"
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "x": 6,
+        "y": 0,
+        "w": 6,
+        "h": 4
+      },
+      "id": 3,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto",
+        "wideLayout": true
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "editorMode": "code",
+          "expr": "sum(soju_upstreams_active{job=\"soju\", instance=~\"$instance\"})",
+          "legendFormat": "Upstreams",
+          "refId": "A",
+          "interval": "30s"
+        }
+      ],
+      "title": "Networks up",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "description": "Configured networks, including disabled networks. Available with SQLite or PostgreSQL through the optional admin collector. Optional read-only soju_admin collector required; failed, missing, or older-than-120-second collections show N/A. Counts are summed across selected instances and user/network configurations, not unique IRC networks or unique channel names.",
+      "fieldConfig": {
+        "defaults": {
+          "noValue": "N/A",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "blue"
+              }
+            ]
+          },
+          "unit": "short",
+          "decimals": 0
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 0,
+        "w": 6,
+        "h": 4
+      },
+      "id": 5,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto",
+        "wideLayout": true
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "editorMode": "code",
+          "expr": "sum(soju_admin_networks_configured{job=\"soju-admin\", soju_instance=~\"$instance\"} and on(job, instance, soju_instance) (soju_admin_collection_success{job=\"soju-admin\", soju_instance=~\"$instance\"} == 1) and on(job, instance, soju_instance) (time() - soju_admin_collected_timestamp_seconds{job=\"soju-admin\", soju_instance=~\"$instance\"} < 120) and on(job, instance) (up{job=\"soju-admin\"} == 1) and on(soju_instance) label_replace(up{job=\"soju\", instance=~\"$instance\"}, \"soju_instance\", \"$1\", \"instance\", \"(.*)\"))",
+          "instant": true,
+          "range": false,
+          "refId": "A",
+          "interval": "30s",
+          "legendFormat": "Networks total"
+        }
+      ],
+      "title": "Networks total",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "description": "Elapsed time since Soju started. With All selected, this card shows the shortest uptime across selected processes; the uptime chart shows each instance. Restarting Soju resets process uptime and its native counters.",
+      "fieldConfig": {
+        "defaults": {
+          "noValue": "N/A",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green"
+              }
+            ]
+          },
+          "unit": "s"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "x": 18,
+        "y": 0,
+        "w": 6,
+        "h": 4
+      },
+      "id": 6,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto",
+        "wideLayout": true
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "editorMode": "code",
+          "expr": "min(time() - process_start_time_seconds{job=\"soju\", instance=~\"$instance\"})",
+          "instant": true,
+          "legendFormat": "Uptime",
+          "range": false,
+          "refId": "A",
+          "interval": "30s"
+        }
+      ],
+      "title": "Uptime",
       "type": "stat"
     },
     {
@@ -171,8 +325,7 @@
             "mode": "absolute",
             "steps": [
               {
-                "color": "green",
-                "value": null
+                "color": "green"
               }
             ]
           }
@@ -180,10 +333,10 @@
         "overrides": []
       },
       "gridPos": {
-        "h": 4,
-        "w": 4,
-        "x": 4,
-        "y": 0
+        "x": 0,
+        "y": 4,
+        "w": 6,
+        "h": 4
       },
       "id": 2,
       "options": {
@@ -201,7 +354,6 @@
         "textMode": "auto",
         "wideLayout": true
       },
-      "pluginVersion": "10.0.0",
       "targets": [
         {
           "datasource": {
@@ -209,74 +361,15 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "editorMode": "code",
-          "expr": "sum(soju_users_active{job=~\"$job\", instance=~\"$instance\"})",
+          "expr": "sum(soju_users_active{job=\"soju\", instance=~\"$instance\"})",
           "instant": false,
           "legendFormat": "Users",
           "range": true,
-          "refId": "A"
+          "refId": "A",
+          "interval": "30s"
         }
       ],
-      "title": "Active users",
-      "type": "stat"
-    },
-    {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${DS_PROMETHEUS}"
-      },
-      "description": "Current active connections from Soju to upstream IRC networks.",
-      "fieldConfig": {
-        "defaults": {
-          "decimals": 0,
-          "noValue": "N/A",
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              }
-            ]
-          }
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 4,
-        "w": 4,
-        "x": 8,
-        "y": 0
-      },
-      "id": 3,
-      "options": {
-        "colorMode": "value",
-        "graphMode": "area",
-        "justifyMode": "auto",
-        "orientation": "auto",
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "",
-          "values": false
-        },
-        "textMode": "auto",
-        "wideLayout": true
-      },
-      "pluginVersion": "10.0.0",
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${DS_PROMETHEUS}"
-          },
-          "editorMode": "code",
-          "expr": "sum(soju_upstreams_active{job=~\"$job\", instance=~\"$instance\"})",
-          "legendFormat": "Upstreams",
-          "refId": "A"
-        }
-      ],
-      "title": "Active upstreams",
+      "title": "Users",
       "type": "stat"
     },
     {
@@ -293,8 +386,7 @@
             "mode": "absolute",
             "steps": [
               {
-                "color": "green",
-                "value": null
+                "color": "green"
               }
             ]
           }
@@ -302,10 +394,10 @@
         "overrides": []
       },
       "gridPos": {
-        "h": 4,
-        "w": 4,
-        "x": 12,
-        "y": 0
+        "x": 6,
+        "y": 4,
+        "w": 6,
+        "h": 4
       },
       "id": 4,
       "options": {
@@ -323,7 +415,6 @@
         "textMode": "auto",
         "wideLayout": true
       },
-      "pluginVersion": "10.0.0",
       "targets": [
         {
           "datasource": {
@@ -331,12 +422,13 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "editorMode": "code",
-          "expr": "sum(soju_downstreams_active{job=~\"$job\", instance=~\"$instance\"})",
+          "expr": "sum(soju_downstreams_active{job=\"soju\", instance=~\"$instance\"})",
           "legendFormat": "Downstreams",
-          "refId": "A"
+          "refId": "A",
+          "interval": "30s"
         }
       ],
-      "title": "Active downstreams",
+      "title": "Clients",
       "type": "stat"
     },
     {
@@ -344,69 +436,7 @@
         "type": "prometheus",
         "uid": "${DS_PROMETHEUS}"
       },
-      "description": "Configured networks by upstream hostname. Available only with Soju's PostgreSQL database backend.",
-      "fieldConfig": {
-        "defaults": {
-          "decimals": 0,
-          "noValue": "SQLite / N/A",
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "blue",
-                "value": null
-              }
-            ]
-          }
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 4,
-        "w": 4,
-        "x": 16,
-        "y": 0
-      },
-      "id": 5,
-      "options": {
-        "colorMode": "value",
-        "graphMode": "none",
-        "justifyMode": "auto",
-        "orientation": "auto",
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "",
-          "values": false
-        },
-        "textMode": "auto",
-        "wideLayout": true
-      },
-      "pluginVersion": "10.0.0",
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${DS_PROMETHEUS}"
-          },
-          "editorMode": "code",
-          "expr": "sum(soju_networks_total{job=~\"$job\", instance=~\"$instance\"})",
-          "instant": true,
-          "legendFormat": "Networks",
-          "range": false,
-          "refId": "A"
-        }
-      ],
-      "title": "Configured networks",
-      "type": "stat"
-    },
-    {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${DS_PROMETHEUS}"
-      },
-      "description": "Elapsed time since the selected Soju process started.",
+      "description": "Channels currently joined on connected upstreams, reported by Soju's live network status. Detached downstream views still count if the bouncer remains joined. Optional read-only soju_admin collector required; failed, missing, or older-than-120-second collections show N/A. Counts are summed across selected instances and user/network configurations, not unique IRC networks or unique channel names.",
       "fieldConfig": {
         "defaults": {
           "noValue": "N/A",
@@ -419,17 +449,18 @@
               }
             ]
           },
-          "unit": "s"
+          "unit": "short",
+          "decimals": 0
         },
         "overrides": []
       },
       "gridPos": {
-        "h": 4,
-        "w": 4,
-        "x": 20,
-        "y": 0
+        "x": 12,
+        "y": 4,
+        "w": 6,
+        "h": 4
       },
-      "id": 6,
+      "id": 19,
       "options": {
         "colorMode": "value",
         "graphMode": "none",
@@ -445,7 +476,6 @@
         "textMode": "auto",
         "wideLayout": true
       },
-      "pluginVersion": "10.0.0",
       "targets": [
         {
           "datasource": {
@@ -453,14 +483,289 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "editorMode": "code",
-          "expr": "min(time() - process_start_time_seconds{job=~\"$job\", instance=~\"$instance\"})",
+          "expr": "sum(soju_admin_channels_joined{job=\"soju-admin\", soju_instance=~\"$instance\"} and on(job, instance, soju_instance) (soju_admin_collection_success{job=\"soju-admin\", soju_instance=~\"$instance\"} == 1) and on(job, instance, soju_instance) (time() - soju_admin_collected_timestamp_seconds{job=\"soju-admin\", soju_instance=~\"$instance\"} < 120) and on(job, instance) (up{job=\"soju-admin\"} == 1) and on(soju_instance) label_replace(up{job=\"soju\", instance=~\"$instance\"}, \"soju_instance\", \"$1\", \"instance\", \"(.*)\"))",
           "instant": true,
-          "legendFormat": "Uptime",
           "range": false,
-          "refId": "A"
+          "refId": "A",
+          "interval": "30s",
+          "legendFormat": "Channels joined"
         }
       ],
-      "title": "Process uptime",
+      "title": "Channels joined",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "description": "Saved channel records. A saved channel may be parted or belong to a disabled network, so this differs from channels joined. Optional read-only soju_admin collector required; failed, missing, or older-than-120-second collections show N/A. Counts are summed across selected instances and user/network configurations, not unique IRC networks or unique channel names.",
+      "fieldConfig": {
+        "defaults": {
+          "noValue": "N/A",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "short",
+          "decimals": 0
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "x": 18,
+        "y": 4,
+        "w": 6,
+        "h": 4
+      },
+      "id": 20,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto",
+        "wideLayout": true
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "editorMode": "code",
+          "expr": "sum(soju_admin_channels_configured{job=\"soju-admin\", soju_instance=~\"$instance\"} and on(job, instance, soju_instance) (soju_admin_collection_success{job=\"soju-admin\", soju_instance=~\"$instance\"} == 1) and on(job, instance, soju_instance) (time() - soju_admin_collected_timestamp_seconds{job=\"soju-admin\", soju_instance=~\"$instance\"} < 120) and on(job, instance) (up{job=\"soju-admin\"} == 1) and on(soju_instance) label_replace(up{job=\"soju\", instance=~\"$instance\"}, \"soju_instance\", \"$1\", \"instance\", \"(.*)\"))",
+          "instant": true,
+          "range": false,
+          "refId": "A",
+          "interval": "30s",
+          "legendFormat": "Channels saved"
+        }
+      ],
+      "title": "Channels saved",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "description": "Configured networks explicitly disabled; these do not retry until re-enabled. Optional read-only soju_admin collector required; failed, missing, or older-than-120-second collections show N/A. Counts are summed across selected instances and user/network configurations, not unique IRC networks or unique channel names.",
+      "fieldConfig": {
+        "defaults": {
+          "noValue": "N/A",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "blue",
+                "value": null
+              }
+            ]
+          },
+          "unit": "short",
+          "decimals": 0
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 8,
+        "w": 8,
+        "h": 4
+      },
+      "id": 21,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto",
+        "wideLayout": true
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "editorMode": "code",
+          "expr": "sum(soju_admin_networks_disabled{job=\"soju-admin\", soju_instance=~\"$instance\"} and on(job, instance, soju_instance) (soju_admin_collection_success{job=\"soju-admin\", soju_instance=~\"$instance\"} == 1) and on(job, instance, soju_instance) (time() - soju_admin_collected_timestamp_seconds{job=\"soju-admin\", soju_instance=~\"$instance\"} < 120) and on(job, instance) (up{job=\"soju-admin\"} == 1) and on(soju_instance) label_replace(up{job=\"soju\", instance=~\"$instance\"}, \"soju_instance\", \"$1\", \"instance\", \"(.*)\"))",
+          "instant": true,
+          "range": false,
+          "refId": "A",
+          "interval": "30s",
+          "legendFormat": "Networks paused"
+        }
+      ],
+      "title": "Networks paused",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "description": "Enabled networks currently disconnected. This is a current outage count, unlike historical failed connection attempts. Optional read-only soju_admin collector required; failed, missing, or older-than-120-second collections show N/A. Counts are summed across selected instances and user/network configurations, not unique IRC networks or unique channel names.",
+      "fieldConfig": {
+        "defaults": {
+          "noValue": "N/A",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 1
+              }
+            ]
+          },
+          "unit": "short",
+          "decimals": 0
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "x": 8,
+        "y": 8,
+        "w": 8,
+        "h": 4
+      },
+      "id": 22,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto",
+        "wideLayout": true
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "editorMode": "code",
+          "expr": "sum(soju_admin_networks_disconnected{job=\"soju-admin\", soju_instance=~\"$instance\"} and on(job, instance, soju_instance) (soju_admin_collection_success{job=\"soju-admin\", soju_instance=~\"$instance\"} == 1) and on(job, instance, soju_instance) (time() - soju_admin_collected_timestamp_seconds{job=\"soju-admin\", soju_instance=~\"$instance\"} < 120) and on(job, instance) (up{job=\"soju-admin\"} == 1) and on(soju_instance) label_replace(up{job=\"soju\", instance=~\"$instance\"}, \"soju_instance\", \"$1\", \"instance\", \"(.*)\"))",
+          "instant": true,
+          "range": false,
+          "refId": "A",
+          "interval": "30s",
+          "legendFormat": "Networks down"
+        }
+      ],
+      "title": "Networks down",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "description": "Fresh means the optional read-only collector succeeded within 120 seconds and its private exporter is reachable. Stale or failed collections are excluded from network/channel cards. Missing collectors show N/A, not zero.",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "noValue": "N/A",
+          "mappings": [
+            {
+              "type": "value",
+              "options": {
+                "0": {
+                  "text": "STALE / FAILED",
+                  "color": "orange"
+                },
+                "1": {
+                  "text": "FRESH",
+                  "color": "green"
+                }
+              }
+            }
+          ],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "orange",
+                "value": null
+              },
+              {
+                "color": "green",
+                "value": 1
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "x": 16,
+        "y": 8,
+        "w": 8,
+        "h": 4
+      },
+      "id": 24,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto",
+        "wideLayout": true
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "expr": "min((soju_admin_collection_success{job=\"soju-admin\", soju_instance=~\"$instance\"} * on(job, instance, soju_instance) ((time() - soju_admin_collected_timestamp_seconds{job=\"soju-admin\", soju_instance=~\"$instance\"}) < bool 120) * on(job, instance) group_left up{job=\"soju-admin\"}) and on(soju_instance) label_replace(up{job=\"soju\", instance=~\"$instance\"}, \"soju_instance\", \"$1\", \"instance\", \"(.*)\"))",
+          "editorMode": "code",
+          "instant": true,
+          "range": false,
+          "refId": "A",
+          "interval": "30s",
+          "legendFormat": "Counts collector"
+        }
+      ],
+      "title": "Counts collector",
       "type": "stat"
     },
     {
@@ -513,7 +818,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 4
+        "y": 12
       },
       "id": 7,
       "options": {
@@ -537,10 +842,11 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "editorMode": "code",
-          "expr": "sum by (instance) (soju_users_active{job=~\"$job\", instance=~\"$instance\"})",
+          "expr": "sum by (instance) (soju_users_active{job=\"soju\", instance=~\"$instance\"})",
           "legendFormat": "{{instance}} users",
           "range": true,
-          "refId": "A"
+          "refId": "A",
+          "interval": "30s"
         },
         {
           "datasource": {
@@ -548,10 +854,11 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "editorMode": "code",
-          "expr": "sum by (instance) (soju_upstreams_active{job=~\"$job\", instance=~\"$instance\"})",
+          "expr": "sum by (instance) (soju_upstreams_active{job=\"soju\", instance=~\"$instance\"})",
           "legendFormat": "{{instance}} upstreams",
           "range": true,
-          "refId": "B"
+          "refId": "B",
+          "interval": "30s"
         },
         {
           "datasource": {
@@ -559,10 +866,11 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "editorMode": "code",
-          "expr": "sum by (instance) (soju_downstreams_active{job=~\"$job\", instance=~\"$instance\"})",
+          "expr": "sum by (instance) (soju_downstreams_active{job=\"soju\", instance=~\"$instance\"})",
           "legendFormat": "{{instance}} downstreams",
           "range": true,
-          "refId": "C"
+          "refId": "C",
+          "interval": "30s"
         }
       ],
       "title": "Active connections",
@@ -573,7 +881,7 @@
         "type": "prometheus",
         "uid": "${DS_PROMETHEUS}"
       },
-      "description": "IRC messages received from and sent to upstream IRC servers per second.",
+      "description": "IRC messages received from and sent to upstream IRC servers per second. Counts IRC protocol messages, including protocol traffic, rather than chat messages alone.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -618,7 +926,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 4
+        "y": 12
       },
       "id": 8,
       "options": {
@@ -643,10 +951,11 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "editorMode": "code",
-          "expr": "sum by (instance) (rate(soju_upstream_in_messages_total{job=~\"$job\", instance=~\"$instance\"}[$__rate_interval]))",
+          "expr": "sum by (instance) (rate(soju_upstream_in_messages_total{job=\"soju\", instance=~\"$instance\"}[$__rate_interval]))",
           "legendFormat": "{{instance}} received",
           "range": true,
-          "refId": "A"
+          "refId": "A",
+          "interval": "30s"
         },
         {
           "datasource": {
@@ -654,10 +963,11 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "editorMode": "code",
-          "expr": "sum by (instance) (rate(soju_upstream_out_messages_total{job=~\"$job\", instance=~\"$instance\"}[$__rate_interval]))",
+          "expr": "sum by (instance) (rate(soju_upstream_out_messages_total{job=\"soju\", instance=~\"$instance\"}[$__rate_interval]))",
           "legendFormat": "{{instance}} sent",
           "range": true,
-          "refId": "B"
+          "refId": "B",
+          "interval": "30s"
         }
       ],
       "title": "Upstream message rate",
@@ -668,7 +978,7 @@
         "type": "prometheus",
         "uid": "${DS_PROMETHEUS}"
       },
-      "description": "IRC messages received from and sent to downstream IRC clients per second.",
+      "description": "IRC messages received from and sent to downstream IRC clients per second. Counts IRC protocol messages, including protocol traffic, rather than chat messages alone.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -713,7 +1023,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 12
+        "y": 20
       },
       "id": 9,
       "options": {
@@ -738,10 +1048,11 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "editorMode": "code",
-          "expr": "sum by (instance) (rate(soju_downstream_in_messages_total{job=~\"$job\", instance=~\"$instance\"}[$__rate_interval]))",
+          "expr": "sum by (instance) (rate(soju_downstream_in_messages_total{job=\"soju\", instance=~\"$instance\"}[$__rate_interval]))",
           "legendFormat": "{{instance}} received",
           "range": true,
-          "refId": "A"
+          "refId": "A",
+          "interval": "30s"
         },
         {
           "datasource": {
@@ -749,10 +1060,11 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "editorMode": "code",
-          "expr": "sum by (instance) (rate(soju_downstream_out_messages_total{job=~\"$job\", instance=~\"$instance\"}[$__rate_interval]))",
+          "expr": "sum by (instance) (rate(soju_downstream_out_messages_total{job=\"soju\", instance=~\"$instance\"}[$__rate_interval]))",
           "legendFormat": "{{instance}} sent",
           "range": true,
-          "refId": "B"
+          "refId": "B",
+          "interval": "30s"
         }
       ],
       "title": "Downstream message rate",
@@ -763,7 +1075,7 @@
         "type": "prometheus",
         "uid": "${DS_PROMETHEUS}"
       },
-      "description": "Rates of upstream connection errors and recovered worker panics. Any sustained non-zero rate needs investigation.",
+      "description": "Failed upstream connection attempts and worker panics per second. Each failed retry contributes another attempt; these rates are not counts of currently disconnected networks.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -804,12 +1116,11 @@
             "mode": "absolute",
             "steps": [
               {
-                "color": "green",
-                "value": null
+                "color": "green"
               },
               {
                 "color": "red",
-                "value": 0.000001
+                "value": 1e-06
               }
             ]
           },
@@ -821,13 +1132,13 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 12
+        "y": 20
       },
       "id": 10,
       "options": {
         "legend": {
           "calcs": [
-            "sum",
+            "lastNotNull",
             "max"
           ],
           "displayMode": "table",
@@ -846,10 +1157,11 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "editorMode": "code",
-          "expr": "sum by (instance) (rate(soju_upstream_connect_errors_total{job=~\"$job\", instance=~\"$instance\"}[$__rate_interval]))",
-          "legendFormat": "{{instance}} connect errors",
+          "expr": "sum by (instance) (rate(soju_upstream_connect_errors_total{job=\"soju\", instance=~\"$instance\"}[$__rate_interval]))",
+          "legendFormat": "{{instance}} failed attempts",
           "range": true,
-          "refId": "A"
+          "refId": "A",
+          "interval": "30s"
         },
         {
           "datasource": {
@@ -857,10 +1169,11 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "editorMode": "code",
-          "expr": "sum by (instance) (rate(soju_worker_panics_total{job=~\"$job\", instance=~\"$instance\"}[$__rate_interval]))",
+          "expr": "sum by (instance) (rate(soju_worker_panics_total{job=\"soju\", instance=~\"$instance\"}[$__rate_interval]))",
           "legendFormat": "{{instance}} worker panics",
           "range": true,
-          "refId": "B"
+          "refId": "B",
+          "interval": "30s"
         }
       ],
       "title": "Reliability event rate",
@@ -871,7 +1184,7 @@
         "type": "prometheus",
         "uid": "${DS_PROMETHEUS}"
       },
-      "description": "Total upstream connection errors and worker panics observed during the selected dashboard time range.",
+      "description": "Estimated failed attempts and worker panics within the selected dashboard time range, calculated with increase() and rounded for display. Repeated retries of one upstream count separately. These are historical events, not the number of networks currently offline.",
       "fieldConfig": {
         "defaults": {
           "decimals": 0,
@@ -884,7 +1197,7 @@
                 "value": null
               },
               {
-                "color": "red",
+                "color": "orange",
                 "value": 1
               }
             ]
@@ -896,7 +1209,7 @@
         "h": 6,
         "w": 6,
         "x": 0,
-        "y": 20
+        "y": 28
       },
       "id": 11,
       "options": {
@@ -914,7 +1227,6 @@
         "textMode": "auto",
         "wideLayout": true
       },
-      "pluginVersion": "10.0.0",
       "targets": [
         {
           "datasource": {
@@ -922,11 +1234,12 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "editorMode": "code",
-          "expr": "sum(increase(soju_upstream_connect_errors_total{job=~\"$job\", instance=~\"$instance\"}[$__range]))",
+          "expr": "sum(increase(soju_upstream_connect_errors_total{job=\"soju\", instance=~\"$instance\"}[$__range]))",
           "instant": true,
-          "legendFormat": "Connect errors",
+          "legendFormat": "Failed attempts",
           "range": false,
-          "refId": "A"
+          "refId": "A",
+          "interval": "30s"
         },
         {
           "datasource": {
@@ -934,14 +1247,15 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "editorMode": "code",
-          "expr": "sum(increase(soju_worker_panics_total{job=~\"$job\", instance=~\"$instance\"}[$__range]))",
+          "expr": "sum(increase(soju_worker_panics_total{job=\"soju\", instance=~\"$instance\"}[$__range]))",
           "instant": true,
           "legendFormat": "Worker panics",
           "range": false,
-          "refId": "B"
+          "refId": "B",
+          "interval": "30s"
         }
       ],
-      "title": "Reliability events in range",
+      "title": "Events in selected range",
       "type": "stat"
     },
     {
@@ -994,7 +1308,7 @@
         "h": 6,
         "w": 6,
         "x": 6,
-        "y": 20
+        "y": 28
       },
       "id": 12,
       "options": {
@@ -1019,10 +1333,11 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "editorMode": "code",
-          "expr": "sum by (instance) (rate(process_cpu_seconds_total{job=~\"$job\", instance=~\"$instance\"}[$__rate_interval]))",
+          "expr": "sum by (instance) (rate(process_cpu_seconds_total{job=\"soju\", instance=~\"$instance\"}[$__rate_interval]))",
           "legendFormat": "{{instance}}",
           "range": true,
-          "refId": "A"
+          "refId": "A",
+          "interval": "30s"
         }
       ],
       "title": "Process CPU",
@@ -1078,7 +1393,7 @@
         "h": 6,
         "w": 6,
         "x": 12,
-        "y": 20
+        "y": 28
       },
       "id": 13,
       "options": {
@@ -1103,10 +1418,11 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "editorMode": "code",
-          "expr": "max by (instance) (process_resident_memory_bytes{job=~\"$job\", instance=~\"$instance\"})",
+          "expr": "max by (instance) (process_resident_memory_bytes{job=\"soju\", instance=~\"$instance\"})",
           "legendFormat": "{{instance}}",
           "range": true,
-          "refId": "A"
+          "refId": "A",
+          "interval": "30s"
         }
       ],
       "title": "Resident memory",
@@ -1182,7 +1498,7 @@
         "h": 6,
         "w": 6,
         "x": 18,
-        "y": 20
+        "y": 28
       },
       "id": 14,
       "options": {
@@ -1207,10 +1523,11 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "editorMode": "code",
-          "expr": "max by (instance) (go_goroutines{job=~\"$job\", instance=~\"$instance\"})",
+          "expr": "max by (instance) (go_goroutines{job=\"soju\", instance=~\"$instance\"})",
           "legendFormat": "{{instance}} goroutines",
           "range": true,
-          "refId": "A"
+          "refId": "A",
+          "interval": "30s"
         },
         {
           "datasource": {
@@ -1218,22 +1535,389 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "editorMode": "code",
-          "expr": "max by (instance) (go_memstats_heap_alloc_bytes{job=~\"$job\", instance=~\"$instance\"})",
+          "expr": "max by (instance) (go_memstats_heap_alloc_bytes{job=\"soju\", instance=~\"$instance\"})",
           "legendFormat": "{{instance}} heap",
           "range": true,
-          "refId": "B"
+          "refId": "B",
+          "interval": "30s"
         }
       ],
       "title": "Go runtime",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "description": "",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisPlacement": "auto",
+            "drawStyle": "line",
+            "fillOpacity": 12,
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "lineInterpolation": "linear",
+            "lineWidth": 2,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "never",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            }
+          },
+          "min": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "s"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 34,
+        "w": 12,
+        "h": 7
+      },
+      "id": 15,
+      "options": {
+        "legend": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "editorMode": "code",
+          "expr": "scrape_duration_seconds{job=\"soju\",instance=~\"$instance\"}",
+          "interval": "30s",
+          "legendFormat": "Scrape duration",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "title": "Scrape duration",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "description": "",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisPlacement": "auto",
+            "drawStyle": "line",
+            "fillOpacity": 12,
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "lineInterpolation": "linear",
+            "lineWidth": 2,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "never",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            }
+          },
+          "decimals": 0,
+          "min": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 34,
+        "w": 12,
+        "h": 7
+      },
+      "id": 16,
+      "options": {
+        "legend": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "editorMode": "code",
+          "expr": "scrape_samples_scraped{job=\"soju\",instance=~\"$instance\"}",
+          "interval": "30s",
+          "legendFormat": "Samples per scrape",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "title": "Collected samples",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "description": "Historical sum of the selected Soju processes' counters since their individual process starts. Counters reset when their process restarts. This is not a current outage count. Each failed retry of the same upstream increments the counter again.",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "decimals": 0,
+          "noValue": "N/A",
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "blue"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "blue",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 41,
+        "w": 12,
+        "h": 4
+      },
+      "id": 17,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto",
+        "wideLayout": true
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "editorMode": "code",
+          "expr": "sum(soju_upstream_connect_errors_total{job=\"soju\", instance=~\"$instance\"})",
+          "instant": true,
+          "range": false,
+          "interval": "30s",
+          "legendFormat": "Failed attempts",
+          "refId": "A"
+        }
+      ],
+      "title": "Failed attempts since start",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "description": "Historical sum of the selected Soju processes' counters since their individual process starts. Counters reset when their process restarts. This is not a current outage count.",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "decimals": 0,
+          "noValue": "N/A",
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "blue"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "blue",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 41,
+        "w": 12,
+        "h": 4
+      },
+      "id": 18,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto",
+        "wideLayout": true
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "editorMode": "code",
+          "expr": "sum(soju_worker_panics_total{job=\"soju\", instance=~\"$instance\"})",
+          "instant": true,
+          "range": false,
+          "interval": "30s",
+          "legendFormat": "Worker panics",
+          "refId": "A"
+        }
+      ],
+      "title": "Worker panics since start",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "description": "Seconds elapsed since each selected Soju process started. A drop to zero indicates a process restart; upstream reconnects do not reset this value.",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "min": 0,
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 2,
+            "fillOpacity": 10
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 45,
+        "w": 24,
+        "h": 7
+      },
+      "id": 23,
+      "options": {
+        "legend": {
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ],
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "editorMode": "code",
+          "expr": "time() - process_start_time_seconds{job=\"soju\", instance=~\"$instance\"}",
+          "instant": false,
+          "range": true,
+          "refId": "A",
+          "interval": "30s",
+          "legendFormat": "{{instance}}"
+        }
+      ],
+      "title": "Soju uptime by instance",
       "type": "timeseries"
     }
   ],
   "refresh": "30s",
   "schemaVersion": 39,
   "tags": [
-    "soju",
-    "irc",
     "bouncer",
+    "irc",
+    "prometheus",
+    "soju",
     "soju-tui"
   ],
   "templating": {
@@ -1249,35 +1933,7 @@
           "type": "prometheus",
           "uid": "${DS_PROMETHEUS}"
         },
-        "definition": "label_values(soju_users_active, job)",
-        "hide": 0,
-        "includeAll": true,
-        "label": "Job",
-        "multi": true,
-        "name": "job",
-        "options": [],
-        "query": {
-          "query": "label_values(soju_users_active, job)",
-          "refId": "PrometheusVariableQueryEditor-Job"
-        },
-        "refresh": 1,
-        "regex": "",
-        "skipUrlSync": false,
-        "sort": 1,
-        "type": "query"
-      },
-      {
-        "allValue": ".*",
-        "current": {
-          "selected": true,
-          "text": "All",
-          "value": "$__all"
-        },
-        "datasource": {
-          "type": "prometheus",
-          "uid": "${DS_PROMETHEUS}"
-        },
-        "definition": "label_values(soju_users_active{job=~\"$job\"}, instance)",
+        "definition": "label_values(up{job=\"soju\"}, instance)",
         "hide": 0,
         "includeAll": true,
         "label": "Instance",
@@ -1285,7 +1941,7 @@
         "name": "instance",
         "options": [],
         "query": {
-          "query": "label_values(soju_users_active{job=~\"$job\"}, instance)",
+          "query": "label_values(up{job=\"soju\"}, instance)",
           "refId": "PrometheusVariableQueryEditor-Instance"
         },
         "refresh": 1,
@@ -1297,7 +1953,7 @@
     ]
   },
   "time": {
-    "from": "now-6h",
+    "from": "now-1h",
     "to": "now"
   },
   "timepicker": {
@@ -1313,7 +1969,7 @@
   },
   "timezone": "browser",
   "title": "Soju IRC Bouncer",
+  "weekStart": "",
   "uid": "soju-irc-bouncer",
-  "version": 1,
-  "weekStart": ""
+  "version": 1
 }

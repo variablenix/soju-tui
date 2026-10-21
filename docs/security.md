@@ -161,5 +161,14 @@ Metrics expose operational counts and, with PostgreSQL, can include upstream
 IRC hostnames when Soju's built-in privacy threshold is met; treat them as
 sensitive infrastructure data.
 When metrics must cross a host boundary, use a reviewed authenticated TLS proxy
-and network source policy, or a host-local Prometheus agent; never expose the
-raw exporter directly to an untrusted network.
+and network source policy, a forwarding listener bound only to an authenticated
+encrypted tunnel between trusted peers, or a host-local Prometheus agent. Keep
+Soju on loopback and never expose the raw exporter to an untrusted network.
+
+The optional Grafana textfile helper is a separate, explicitly installed
+read-only collector. It needs local admin-socket access and publishes only
+aggregate counts. Keep its code, unit files, output directory, and all parent
+directories administrator-owned; a writable helper or unit would give an
+untrusted user the service account's access. Serve the textfile directory only
+through a private exporter. The package includes examples as documentation and
+does not activate them or grant permissions.

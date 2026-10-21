@@ -129,6 +129,9 @@ build_package() {
 	for OBSERVABILITY_FILE in \
 		"$ROOT_DIR/grafana/README.md" \
 		"$ROOT_DIR/grafana/prometheus-scrape.yml.example" \
+		"$ROOT_DIR/grafana/soju-textfile.py" \
+		"$ROOT_DIR/grafana/soju-textfile.service.example" \
+		"$ROOT_DIR/grafana/soju-textfile.timer.example" \
 		"$ROOT_DIR/grafana/soju-overview.json"; do
 		install_source_file "$OBSERVABILITY_FILE" 0644 "$PACKAGE_ROOT/usr/share/doc/soju-tui/grafana/${OBSERVABILITY_FILE##*/}"
 	done

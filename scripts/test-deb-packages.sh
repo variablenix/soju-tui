@@ -112,6 +112,9 @@ validate_package() {
 	[ -f "$EXTRACT_ROOT/usr/share/doc/soju-tui/grafana/prometheus-scrape.yml.example" ] || fail "$PACKAGE_PATH is missing the Prometheus scrape example"
 	[ -f "$EXTRACT_ROOT/usr/share/doc/soju-tui/grafana/soju-overview.json" ] || fail "$PACKAGE_PATH is missing the Grafana dashboard"
 	cmp -s "$ROOT_DIR/grafana/soju-overview.json" "$EXTRACT_ROOT/usr/share/doc/soju-tui/grafana/soju-overview.json" || fail "$PACKAGE_PATH contains a different Grafana dashboard"
+	for COLLECTOR_FILE in soju-textfile.py soju-textfile.service.example soju-textfile.timer.example; do
+		cmp -s "$ROOT_DIR/grafana/$COLLECTOR_FILE" "$EXTRACT_ROOT/usr/share/doc/soju-tui/grafana/$COLLECTOR_FILE" || fail "$PACKAGE_PATH is missing or changed $COLLECTOR_FILE"
+	done
 	[ -f "$EXTRACT_ROOT/usr/share/lintian/overrides/soju-tui" ] || fail "$PACKAGE_PATH is missing documented Lintian overrides"
 	[ -f "$EXTRACT_ROOT/usr/share/man/man1/soju-tui.1.gz" ] || fail "$PACKAGE_PATH is missing the soju-tui man page"
 	[ -f "$EXTRACT_ROOT/usr/share/man/man8/soju-tui-setup.8.gz" ] || fail "$PACKAGE_PATH is missing the setup man page"

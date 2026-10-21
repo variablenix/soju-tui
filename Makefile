@@ -7,6 +7,7 @@ build:
 
 test:
 	go test ./...
+	python3 -m unittest discover -s grafana -p 'test_*.py'
 
 vet:
 	go vet ./...
